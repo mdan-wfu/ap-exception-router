@@ -204,3 +204,38 @@ Append-only. Each entry: Decision / Alternatives considered / Why + date.
 2026-07-29
 
 ---
+
+**Decision:** Extraction is permissive by design. `Invoice` accepts empty vendor names, negative quantities, null due dates, negative totals, and stated subtotals that contradict the line items. Structural validity only; nothing in the schema evaluates business rules.
+**Alternatives considered:** Reject with Pydantic constraints (`PositiveInt`, non-empty strings, `Field(ge=0)`).
+**Why:** INV-1009 has quantity=-5 and empty vendor; INV-1013 carries a $50 grand-total error. If Pydantic rejects any of these, extraction fails, the repair loop tries to "correct" the document into validity, and the Phase 4 finding never fires. A schema that enforces business rules destroys the evidence those rules exist to detect.
+2026-07-29
+
+---
+
+**Decision:** `corrections[]` is reserved for changes that alter what the source LITERALLY said. Date format normalization (`01/28/2026` → `2026-01-28`, `26-Jan-2026` → `2026-01-26`) is a representation change and does NOT go in `corrections[]`. OCR character substitutions (letter `O` → digit `0`) DO.
+**Alternatives considered:** Log every parse into `corrections[]` for symmetry.
+**Why:** `corrections[]` is the evidence trail for `EX-` findings — any entry there should signal "the extractor decided the source was wrong and repaired it." Logging every reformat pollutes that signal to the point of uselessness. A downstream reader of `corrections[]` should read every entry as noteworthy.
+2026-07-29
+
+---
+
+**Decision:** CSV shape detection uses header width. `field,value` (2 cols, first cell = "field") → vertical key–value; anything else → row-per-item. Vertical shape is parsed positionally with an accumulating item dict, never `csv.DictReader`.
+**Alternatives considered:** Sniff dialect + fall through both parsers; require an explicit hint per file.
+**Why:** `csv.DictReader` collapses repeated keys silently — INV-1006 has `item` twice, and a naive dict would drop the first line item without any error. The two shapes in this corpus are structurally distinct enough that a 2-line-of-code detector is unambiguous; a more general sniffer would be more code for the same guarantee.
+2026-07-29
+
+---
+
+**Decision:** The extractor prompt succeeded in making silent repairs declared. Phase 0b baseline (minimal prompt): INV-1012 returned `date: "26-Jan-2026"` and `total: 9975.0` with `corrections: []`. Phase 3 (prompts/extractor.md, replayed cassette): INV-1012 returns the same corrected values PLUS `corrections=[{field_path: "invoice_date", original: "2O26", corrected: "2026", reason: "OCR: letter O replaced by digit 0 in date token"}, {field_path: "line_items[1].line_amount", original: "$3,500.O0", corrected: "$3,500.00", reason: "OCR: letter O replaced by digit 0 in currency token"}]`, plus `vendor_claims=["(formerly FastShip Ltd.)"]`, plus `references=["PO-20260115"]`, plus the notes block. Every piece of evidence the minimal-prompt run silently dropped now lands in the extracted Invoice.
+**Alternatives considered:** Trust the model's raw output and detect repairs by comparing extracted values to source text via a diff.
+**Why:** A post-hoc diff cannot distinguish an intentional character-level repair (`2O26` → `2026`) from a coincidental match on a different token. Making the model declare its repairs at extraction time keeps the evidence attached to the field being repaired and to a human-readable reason.
+2026-07-29
+
+---
+
+**Decision:** No file required LLM fallback. All six JSON, three CSV, and one XML file cleared `MIN_FIELD_COVERAGE=0.75` on the deterministic parse and never triggered `_fall_back()`. INV-1009 (empty vendor) sits at exactly 3/4 coverage — the threshold is deliberately at that edge; drop it and INV-1009 would silently degrade to an LLM extraction that would probably invent a vendor name.
+**Alternatives considered:** Raise threshold to 1.0 (all four core fields must be present); lower to 0.5.
+**Why:** 0.75 catches structurally broken files (three or more of the four core fields missing) while accepting the corpus's known-permissive edge case. If a future corpus needs a stricter bar, tighten per-adapter — a global bump would pull INV-1009 into LLM territory.
+2026-07-29
+
+---

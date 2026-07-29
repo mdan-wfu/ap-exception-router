@@ -92,14 +92,14 @@ Run a throwaway extraction against the four hardest documents, three times each,
 **Exit:** a recorded call replays with zero network access. Every subsequent phase records as it goes.
 
 ## Phase 3 — Format adapters
-- [ ] `json_adapter` — handles missing `amount` fields (INV-1005) and the 8-line-item case (INV-1013)
-- [ ] `csv_adapter` — **both** schemas: vertical key–value with repeated keys (INV-1006), and row-per-item with trailing summary rows (INV-1007, INV-1015)
-- [ ] `xml_adapter` — including the EUR path (INV-1014)
-- [ ] `text_adapter` — LLM extraction, driven by `prompts/extractor.md`
-- [ ] `pdf_adapter` — pdfplumber → text → LLM extraction
-- [ ] Triage router: extension → adapter, with LLM fallback on parse failure or low field coverage
-- [ ] Schema repair loop — feed Pydantic validation errors back to the model, max 2 attempts
-- [ ] Test per adapter against its known trap
+- [x] `json_adapter` — handles missing `amount` fields (INV-1005) and the 8-line-item case (INV-1013)
+- [x] `csv_adapter` — **both** schemas: vertical key–value with repeated keys (INV-1006), and row-per-item with trailing summary rows (INV-1007, INV-1015)
+- [x] `xml_adapter` — including the EUR path (INV-1014)
+- [x] `text_adapter` — LLM extraction, driven by `prompts/extractor.md`
+- [x] `pdf_adapter` — pdfplumber → text → LLM extraction
+- [x] Triage router: extension → adapter, with LLM fallback on parse failure or low field coverage
+- [x] Schema repair loop — feed Pydantic validation errors back to the model, max 2 attempts
+- [x] Test per adapter against its known trap
 
 **Exit:** all 20 files produce a canonical `Invoice`. Extraction correctness not yet measured.
 
@@ -209,3 +209,5 @@ Claude Code appends one line per session: date, phases touched, anything that su
 2026-07-29 — Phase 1 complete. Schema, canonicalization, seed. Surprises: INV-1013 carries a deliberate +$50 grand-total error in BOTH the JSON and the PDF that CLAUDE.md §6 doesn't call out — this is an additional AR- finding on top of the aggregate stock overrun. INV-1011 PDF really is less complete than the txt source (no subtotal/tax line generated). 30 tests pass.
 
 2026-07-29 — Phase 2 complete. Provider (retry + cost/latency capture) + cassette (key hashes prompt text; auto/live/replay modes; credential redaction). Live smoke round-trip works end-to-end (`pong` cassette recorded). Surprises: `grok-4.5` resolves to `grok-4.5` (not a dated build) on this account — proven by the ModelCall capture; a trivial single-word reply cost 214 input tokens (system-prompt overhead is not zero). 58 pass, 2 skip.
+
+2026-07-29 — Phase 3 complete. All 20 corpus files produce Invoices. Deterministic adapters (json/csv/xml) + LLM adapters (text/pdf) + triage router + repair loop. prompts/extractor.md now instructs declared repairs — INV-1012 produces 2 explicit corrections for the OCR substitutions (previously silent). No LLM fallbacks fired on this corpus (all deterministic parsers cleared MIN_FIELD_COVERAGE=0.75). Both previously-skipped hash tests pass end-to-end. Surprise: `.env` had LLM_MODE=live from Phase 2 dev, making Phase 3 test runs 150+ seconds per invocation until switched to auto. 110 pass, 0 skip.

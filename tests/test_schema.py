@@ -277,11 +277,10 @@ def test_model_copy_produces_new_hash_when_semantics_change() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Integration tests — SKIPPED until Phase 3 adds adapters.
-# Remove the skip markers as part of Phase 3.
+# Integration tests — Phase 3 adapters wired in. These exercise real corpus
+# files through the pipeline.
 # ---------------------------------------------------------------------------
 
-@pytest.mark.skip(reason="requires Phase 3 adapters (text_adapter, pdf_adapter)")
 def test_inv_1011_txt_and_pdf_share_semantic_hash_but_differ_on_file_hash() -> None:
     """INV-1011 exists as both .txt and rendered .pdf. The PDF omits the
     subtotal and tax lines the txt source contains, so:
@@ -290,23 +289,30 @@ def test_inv_1011_txt_and_pdf_share_semantic_hash_but_differ_on_file_hash() -> N
     This is the DP-001 (same invoice, two files) vs DP-002 (same number,
     differing content) discrimination.
     """
-    from src.adapters.text_adapter import extract as extract_txt  # Phase 3
-    from src.adapters.pdf_adapter import extract as extract_pdf   # Phase 3
+    from pathlib import Path
 
-    txt = extract_txt("data/invoices/invoice_1011.txt")
-    pdf = extract_pdf("data/invoices/invoice_1011.pdf")
+    from src.adapters.pdf_adapter import extract as extract_pdf
+    from src.adapters.text_adapter import extract as extract_txt
+
+    txt = extract_txt(Path("data/invoices/invoice_1011.txt"))
+    pdf = extract_pdf(Path("data/invoices/invoice_1011.pdf"))
     assert txt.file_hash != pdf.file_hash
-    assert txt.semantic_hash == pdf.semantic_hash
+    assert txt.semantic_hash == pdf.semantic_hash, (
+        "The Phase 1 hash design failed on the real corpus. Do not work "
+        "around this by tweaking adapters — investigate what's differing "
+        "in the semantic core."
+    )
 
 
-@pytest.mark.skip(reason="requires Phase 3 adapter (json_adapter)")
 def test_inv_1004_and_revised_produce_differing_semantic_hash() -> None:
     """INV-1004 and INV-1004_revised share the same normalized invoice number
     (dedupe key) but their line items and totals genuinely differ. Semantic
     hash MUST NOT collide, or dedupe eats the flagship escalation case.
     """
-    from src.adapters.json_adapter import extract as extract_json  # Phase 3
+    from pathlib import Path
 
-    original = extract_json("data/invoices/invoice_1004.json")
-    revised = extract_json("data/invoices/invoice_1004_revised.json")
+    from src.adapters.json_adapter import extract as extract_json
+
+    original = extract_json(Path("data/invoices/invoice_1004.json"))
+    revised = extract_json(Path("data/invoices/invoice_1004_revised.json"))
     assert original.semantic_hash != revised.semantic_hash
