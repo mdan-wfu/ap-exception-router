@@ -33,6 +33,7 @@ def _fake_response(
     resolved_model: str = "grok-4.5-2026-07-01",
     tokens_in: int = 12,
     tokens_out: int = 34,
+    system_fingerprint: str | None = "fp_abcdef01",
 ) -> MagicMock:
     msg = MagicMock()
     msg.content = content
@@ -46,6 +47,7 @@ def _fake_response(
     response.choices = [choice]
     response.usage = usage
     response.model = resolved_model
+    response.system_fingerprint = system_fingerprint
     return response
 
 
@@ -129,6 +131,31 @@ def test_record_then_replay_round_trip(tmp_path: Path, monkeypatch) -> None:
     assert second.model_call.tokens_in == first.model_call.tokens_in
     assert second.model_call.tokens_out == first.model_call.tokens_out
     assert second.model_call.latency_ms == first.model_call.latency_ms
+    assert second.model_call.system_fingerprint == first.model_call.system_fingerprint
+
+
+def test_system_fingerprint_captured_from_response(tmp_path: Path) -> None:
+    """system_fingerprint is the only field that would detect a silent alias remap."""
+    store = CassetteStore(root=tmp_path)
+    client = _fake_client(return_value=_fake_response(system_fingerprint="fp_xyz123"))
+    provider = LLMProvider(
+        api_key="dummy", model="grok-4.5", mode="live",
+        cassette_store=store, client=client,
+    )
+    result = provider.chat([{"role": "user", "content": "hi"}])
+    assert result.model_call.system_fingerprint == "fp_xyz123"
+
+
+def test_system_fingerprint_none_when_absent(tmp_path: Path) -> None:
+    """Providers that omit system_fingerprint must not break the pipeline."""
+    store = CassetteStore(root=tmp_path)
+    client = _fake_client(return_value=_fake_response(system_fingerprint=None))
+    provider = LLMProvider(
+        api_key="dummy", model="grok-4.5", mode="live",
+        cassette_store=store, client=client,
+    )
+    result = provider.chat([{"role": "user", "content": "hi"}])
+    assert result.model_call.system_fingerprint is None
 
 
 def test_prompt_edit_forces_new_live_call(tmp_path: Path) -> None:

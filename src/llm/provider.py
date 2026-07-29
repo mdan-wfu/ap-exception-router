@@ -248,6 +248,7 @@ class LLMProvider:
         model_call = ModelCall(
             requested_model=self.model,
             resolved_model=getattr(response, "model", self.model),
+            system_fingerprint=getattr(response, "system_fingerprint", None),
             prompt_name=prompt_name,
             tokens_in=tokens_in,
             tokens_out=tokens_out,

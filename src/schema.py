@@ -285,14 +285,20 @@ class Decision(BaseModel):
 class ModelCall(BaseModel):
     """A single LLM API call.
 
-    Both requested and resolved model identifiers are stored: `grok-4.5` is an
-    alias with no dated equivalent available. The resolved id (from the API
-    response) proves what actually answered on any given call.
+    All three identifiers are stored:
+      - `requested_model` — what we asked for
+      - `resolved_model`  — what `response.model` echoed back (on xAI, this
+                             is the alias verbatim; it does NOT prove which
+                             weights served the request)
+      - `system_fingerprint` — the opaque backend build identifier; the ONLY
+                             field that would detect a silent alias remap.
+                             None if the provider omits it.
     """
     model_config = ConfigDict(protected_namespaces=())
 
     requested_model: str
     resolved_model: str
+    system_fingerprint: str | None = None
     prompt_name: str | None = None
     tokens_in: int
     tokens_out: int

@@ -155,3 +155,10 @@ Append-only. Each entry: Decision / Alternatives considered / Why + date.
 2026-07-29
 
 ---
+
+**Decision (correcting a prior entry):** The earlier Phase 2 claim that `resolved_model` capture "will detect any silent swap" is wrong. `response.model` echoes the alias verbatim on xAI (`grok-4.5` → `grok-4.5`), so if xAI repointed the alias to different weights, that field would show no change. Adding `ModelCall.system_fingerprint`, populated from `response.system_fingerprint` when the provider supplies it.
+**Alternatives considered:** Trust the earlier (wrong) claim and skip fingerprint capture; try to detect drift by comparing response quality across runs.
+**Why:** `system_fingerprint` is the only field a provider exposes that would actually shift when the backend build changes. Empirical probe on 2026-07-29 confirms xAI populates it (example value: `fp_a39489019fa99b6e`). `resolved_model` remains useful — it proves what was requested and acknowledged — but it does NOT prove what actually served. If a future provider omits `system_fingerprint`, alias drift is undetectable on that provider and is an accepted known risk; note it in the RunRecord audit view and document as a limitation.
+2026-07-29
+
+---
