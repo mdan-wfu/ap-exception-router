@@ -161,9 +161,13 @@ class Invoice(BaseModel):
     vendor_address: str | None = None
     vendor_email: str | None = None
 
-    # Dates as strings — parsing/validation happens in the terms validator
-    invoice_date: str | None = None
-    due_date: str | None = None
+    # Dates: raw + parsed. INV-1003 says `Due Date: yesterday`; the parsed
+    # field must be None and the raw literal must survive as evidence for
+    # the Phase 4 TM- finding. Never fabricate a plausible substitute.
+    date_raw: str | None = None
+    invoice_date: str | None = None       # ISO-8601 or None
+    due_date_raw: str | None = None
+    due_date: str | None = None           # ISO-8601 or None
 
     # What the DOCUMENT claims
     line_items: list[LineItem] = Field(default_factory=list)

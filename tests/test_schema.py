@@ -103,6 +103,52 @@ def _minimal_invoice() -> Invoice:
     )
 
 
+def test_invoice_accepts_bad_data_by_design() -> None:
+    """The schema is structurally strict, semantically permissive. INV-1009
+    has quantity=-5, empty vendor, null due date, negative total. All of
+    these must survive construction — the Phase 4 findings depend on them
+    being visible, not rejected."""
+    inv = Invoice(
+        invoice_number_raw="INV-1009",
+        invoice_number="INV-1009",
+        vendor_raw="",
+        vendor_name="",                           # empty allowed
+        source_file="invoice_1009.json",
+        source_format="json",
+        file_hash="abc",
+        line_items=[
+            LineItem(
+                raw_item_name="WidgetA",
+                canonical_item="WidgetA",
+                quantity=-5,                       # negative allowed
+                unit_price=Money(amount_native=Decimal("250"), currency="USD"),
+            ),
+        ],
+        due_date_raw=None,
+        due_date=None,                             # null allowed
+        stated_total=Money(amount_native=Decimal("-250"), currency="USD"),  # negative allowed
+    )
+    assert inv.line_items[0].quantity == -5
+    assert inv.vendor_name == ""
+
+
+def test_invoice_preserves_unparseable_due_date_in_raw_field() -> None:
+    """INV-1003 says `Due Date: yesterday`. Parsed must be None; raw must survive."""
+    inv = Invoice(
+        invoice_number_raw="INV-1003",
+        invoice_number="INV-1003",
+        vendor_raw="Fraudster LLC",
+        vendor_name="Fraudster LLC",
+        source_file="invoice_1003.txt",
+        source_format="txt",
+        file_hash="abc",
+        due_date_raw="yesterday",
+        due_date=None,
+    )
+    assert inv.due_date is None
+    assert inv.due_date_raw == "yesterday"
+
+
 def test_invoice_is_frozen() -> None:
     """Mutating a field on a constructed Invoice must raise."""
     inv = _minimal_invoice()
