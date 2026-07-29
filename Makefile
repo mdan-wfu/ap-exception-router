@@ -11,7 +11,7 @@ probe:
 	.venv/bin/python scripts/probe.py
 
 demo:
-	@echo "not yet implemented"
+	LLM_MODE=replay .venv/bin/python main.py --batch --replay
 
 test:
 	.venv/bin/pytest tests/

@@ -7,7 +7,18 @@ load_dotenv()
 # LLM provider
 XAI_API_KEY: str = os.environ.get("XAI_API_KEY", "")
 GROK_MODEL: str = os.environ.get("GROK_MODEL", "")
-LLM_MODE: str = os.environ.get("LLM_MODE", "replay")
+# One of: "live" (always call), "replay" (never call; miss is fatal), "auto"
+# (replay on hit, live on miss). Default "auto" so `python main.py ...` works
+# both with and without a fresh API key.
+LLM_MODE: str = os.environ.get("LLM_MODE", "auto")
+
+# Pricing — USD per million tokens. Populated from the xAI console pricing
+# page; kept at 0.0 as clearly-flagged placeholders until confirmed.
+# TODO(pricing): confirm PRICE_PER_1M_INPUT / PRICE_PER_1M_OUTPUT for grok-4.5
+# from https://console.x.ai and update. Every RunRecord's cost_usd depends
+# on these two values; leaving them at zero underreports cost.
+PRICE_PER_1M_INPUT: float = 0.0
+PRICE_PER_1M_OUTPUT: float = 0.0
 
 # Financial thresholds
 APPROVAL_THRESHOLD_USD: float = 10_000
