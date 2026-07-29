@@ -113,3 +113,10 @@ Append-only. Each entry: Decision / Alternatives considered / Why + date.
 2026-07-29
 
 ---
+
+**Decision:** Split `Invoice.content_hash` into two fields: `file_hash` (SHA-256 of raw bytes, unchanged) and `semantic_hash` (SHA-256 over normalized invoice_number, normalized vendor_name, sorted (item, quantity, unit_price_usd) tuples, and stated_total_usd). Semantic hash deliberately excludes subtotal, tax, notes, references, and source format.
+**Alternatives considered:** Retain a single `content_hash` over the full canonical `Invoice`, or over all monetary fields including subtotal and tax.
+**Why:** `file_hash` fires zero times on this corpus because a txt invoice and its rendered PDF are never byte-identical. INV-1011's PDF omits the subtotal and tax lines its txt source contains, so any hash covering those fields would classify the pair as DP-002 (same number, differing content) when the correct classification is DP-001 (same invoice, two files). The semantic core must exclude rendering-dependent fields. INV-1004 vs INV-1004_revised still separate correctly on `semantic_hash` because their line items and totals genuinely differ.
+2026-07-29
+
+---

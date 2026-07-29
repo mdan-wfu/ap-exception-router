@@ -19,6 +19,7 @@ Design notes worth carrying forward:
 from __future__ import annotations
 
 import hashlib
+import json
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
@@ -27,6 +28,11 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from src.config import FX_RATES
+
+# Amounts are quantized to this precision before hashing so that "250" and
+# "250.00" produce the same semantic hash. Cent precision is not enough:
+# unit prices can carry sub-cent fractions in some contract structures.
+_HASH_QUANTIZE = Decimal("0.0001")
 
 
 # ---------------------------------------------------------------------------
@@ -153,12 +159,75 @@ class Invoice(BaseModel):
     source_format: str
     corrections: list[Correction] = Field(default_factory=list)
     extraction_confidence: float = 1.0
-    content_hash: str
+
+    # Two hashes serve two different duplicate-detection questions.
+    #
+    #   file_hash     — SHA-256 of raw file bytes. Answers "is this the same
+    #                    file?". Zero matches on this corpus, because a .txt
+    #                    invoice and its rendered .pdf are never byte-identical.
+    #
+    #   semantic_hash — SHA-256 of the invoice's semantic core (normalized
+    #                    number, vendor, sorted line-item tuples, stated total
+    #                    in USD). Deliberately EXCLUDES subtotal, tax, notes,
+    #                    references, and source format so that INV-1011's
+    #                    txt/pdf pair — where the PDF omits subtotal/tax lines
+    #                    — classifies as DP-001 (same invoice, two files) and
+    #                    not DP-002 (same number, differing content).
+    #                    INV-1004 vs INV-1004_revised still separate here,
+    #                    because line items and totals genuinely differ.
+    file_hash: str
+    semantic_hash: str = ""
 
     @staticmethod
-    def compute_content_hash(content: bytes) -> str:
-        """SHA-256 of raw file bytes. Used for identical-file duplicate detection."""
+    def compute_file_hash(content: bytes) -> str:
+        """SHA-256 of raw file bytes. Answers 'is this the same file?'."""
         return hashlib.sha256(content).hexdigest()
+
+    @staticmethod
+    def compute_semantic_hash(
+        invoice_number: str,
+        vendor_name: str,
+        line_items: list[LineItem],
+        stated_total: Money | None,
+    ) -> str:
+        """SHA-256 over the invoice's semantic core. See field docstring above."""
+        items_key = sorted(
+            [
+                [
+                    li.canonical_item or li.raw_item_name,
+                    li.quantity,
+                    format(li.unit_price.amount_usd.quantize(_HASH_QUANTIZE), "f"),
+                ]
+                for li in line_items
+            ]
+        )
+        total_str = (
+            format(stated_total.amount_usd.quantize(_HASH_QUANTIZE), "f")
+            if stated_total is not None
+            else ""
+        )
+        blob = json.dumps(
+            {
+                "invoice_number": invoice_number,
+                "vendor_name": vendor_name,
+                "items": items_key,
+                "total_usd": total_str,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        return hashlib.sha256(blob.encode()).hexdigest()
+
+    @model_validator(mode="after")
+    def _fill_semantic_hash(self) -> "Invoice":
+        if not self.semantic_hash:
+            self.semantic_hash = self.compute_semantic_hash(
+                self.invoice_number,
+                self.vendor_name,
+                self.line_items,
+                self.stated_total,
+            )
+        return self
 
 
 # ---------------------------------------------------------------------------
