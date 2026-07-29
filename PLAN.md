@@ -37,18 +37,18 @@ Never cut: cassette replay, the eval harness, `DECISIONS.md`, the README.
 Goal: all 16 invoices produce a decision. Ugly is acceptable. Nothing below is polish.
 
 ## Phase 0 — Scaffold
-- [ ] Repo structure per `CLAUDE.md` §7
-- [ ] `pyproject.toml` / `requirements.txt`, `.env.example`, `.gitignore`, `Makefile` skeleton
-- [ ] `src/config.py` with all constants from `CLAUDE.md` §4
-- [ ] GitHub repo created first; work happens inside the clone, not transferred later
-- [ ] `.gitignore` before anything else: `.env`, `__pycache__/`, `.venv/`, `*.db`, `runs/`
-- [ ] xAI key in `.env`, exact model ID pinned from the console
-- [ ] **Capability probe** (`scripts/probe.py`) — verify all three before building on any of them:
-  - [ ] basic completion returns text
-  - [ ] structured output returns valid JSON against a representative Pydantic schema, with no `minLength`/`maxItems`/`pattern` constraints in the sent schema
-  - [ ] tool calling round-trips: model requests a tool, receives the result, produces a final answer
-- [ ] `DECISIONS.md` initialized with the two stale-brief entries (SDK snippet, `grok.x.ai` vs `api.x.ai`)
-- [ ] Initial commit
+- [x] Repo structure per `CLAUDE.md` §7
+- [x] `requirements.txt`, `.env.example`, `.gitignore`, `Makefile` skeleton
+- [x] `src/config.py` with all constants from `CLAUDE.md` §4
+- [x] GitHub repo created first; work happens inside the clone, not transferred later
+- [x] `.gitignore` before anything else: `.env`, `__pycache__/`, `.venv/`, `*.db`, `runs/`
+- [x] xAI key in `.env`, exact model ID pinned from the console (`grok-4.5`)
+- [x] **Capability probe** (`scripts/probe.py`) — verify all three before building on any of them:
+  - [x] basic completion returns text
+  - [x] structured output returns valid JSON against a representative Pydantic schema, with no `minLength`/`maxItems`/`pattern` constraints in the sent schema
+  - [x] tool calling round-trips: model requests a tool, receives the result, produces a final answer
+- [x] `DECISIONS.md` initialized with the two stale-brief entries (SDK snippet, `grok.x.ai` vs `api.x.ai`)
+- [x] Initial commit
 
 **Exit:** all three capabilities confirmed on your account. **Grok is the only configured provider — do not develop against Claude at any point.** If a capability misbehaves, restructure around it rather than switching models: constrained structured outputs fall back to plain JSON mode plus the Pydantic repair loop, which is already in the plan.
 
@@ -63,9 +63,9 @@ Run a throwaway extraction against the four hardest documents, three times each,
 | `invoice_1003.txt` | **Date hallucination** — does `Due Date: yesterday` become `null`, or does the model invent a plausible date? |
 | `invoice_1002.txt` | **Normalization drift** — does `Inv #: 1002` return as `1002` or `INV-1002`? The dedupe key depends on consistency |
 
-- [ ] Each document run 3× — flag any run-to-run variance in quantities or totals; if present, drop temperature before proceeding
-- [ ] Record all five behaviors in `DECISIONS.md`
-- [ ] Decide and record: does the extractor need a `corrections[]` field so silent repairs surface as `EX-` findings? (Default: yes)
+- [x] Each document run 3× — flag any run-to-run variance in quantities or totals; if present, drop temperature before proceeding
+- [x] Record all five behaviors in `DECISIONS.md`
+- [x] Decide and record: does the extractor need a `corrections[]` field so silent repairs surface as `EX-` findings? (Default: yes)
 
 **Exit:** you know whether `prompts/extractor.md` is a two-hour problem or a half-day one, and Phase 3 is scoped accordingly. This baseline is also README material — benchmarking the model on the hardest inputs before writing the extractor is a decision worth showing.
 
@@ -203,3 +203,5 @@ Assembled from `DECISIONS.md`. Drafted in the planning chat, not by Claude Code.
 ## Session log
 
 Claude Code appends one line per session: date, phases touched, anything that surprised you.
+
+2026-07-29 — Phase 0 + 0b complete. Scaffold, config, probe, extraction baseline. Surprises: `grok-4.5` doesn't follow the dated-identifier convention; INV-1003 "yesterday" returned as literal string rather than null (no hallucination); INV-1012 silent correction confirmed — `corrections[]` field needed in schema.
