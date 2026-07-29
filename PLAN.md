@@ -70,16 +70,16 @@ Run a throwaway extraction against the four hardest documents, three times each,
 **Exit:** you know whether `prompts/extractor.md` is a two-hour problem or a half-day one, and Phase 3 is scoped accordingly. This baseline is also README material — benchmarking the model on the hardest inputs before writing the extractor is a decision worth showing.
 
 ## Phase 1 — Schema, reference data, and corpus forensics
-- [ ] `src/schema.py` — `LineItem`, `Invoice`, `Finding`, `Decision`, `RunRecord`. Every monetary field carries `amount_native` + `amount_usd` + `currency`
-- [ ] Field-level `confidence` and `provenance` on extracted values
-- [ ] `corrections[]` on `Invoice` — every silent repair the extractor makes (OCR character substitution, inferred field, normalized identifier) recorded with the original and corrected value, so validators can raise `EX-` findings rather than losing the signal
-- [ ] **Read `generate_pdfs.py` before writing any adapter.** Record in `DECISIONS.md`:
-  - [ ] whether the OCR corruption (`2O26`, `$3,500.O0`) is injected deliberately, and the exact substitution rule — this determines whether O→0 normalization is narrow (numeric tokens only) or global
-  - [ ] whether the txt/pdf duplicate pairs are a deliberate trap or a rendering artifact
-  - [ ] any embedded source literals — these become exact ground truth for INV-1011/1012/1013
-- [ ] `src/store/seed.py` — `inventory` (with `reference_unit_price`) and `vendors` tables per `CLAUDE.md` §6
-- [ ] Item-name canonicalization helper (`Widget A`, `WidgetB`, `WidgetA (rush order)` → `WidgetA`)
-- [ ] `make seed` rebuilds the reference DB from scratch
+- [x] `src/schema.py` — `LineItem`, `Invoice`, `Finding`, `Decision`, `RunRecord`. Every monetary field carries `amount_native` + `amount_usd` + `currency`
+- [x] Field-level `confidence` and `provenance` on extracted values
+- [x] `corrections[]` on `Invoice` — every silent repair the extractor makes (OCR character substitution, inferred field, normalized identifier) recorded with the original and corrected value, so validators can raise `EX-` findings rather than losing the signal
+- [x] **Read `generate_pdfs.py` before writing any adapter.** Record in `DECISIONS.md`:
+  - [x] whether the OCR corruption (`2O26`, `$3,500.O0`) is injected deliberately, and the exact substitution rule — this determines whether O→0 normalization is narrow (numeric tokens only) or global
+  - [x] whether the txt/pdf duplicate pairs are a deliberate trap or a rendering artifact
+  - [x] any embedded source literals — these become exact ground truth for INV-1011/1012/1013
+- [x] `src/store/seed.py` — `inventory` (with `reference_unit_price`) and `vendors` tables per `CLAUDE.md` §6
+- [x] Item-name canonicalization helper (`Widget A`, `WidgetB`, `WidgetA (rush order)` → `WidgetA`)
+- [x] `make seed` rebuilds the reference DB from scratch
 
 **Exit:** `sqlite3 reference.db` shows both tables populated; generator findings logged.
 
@@ -205,3 +205,5 @@ Assembled from `DECISIONS.md`. Drafted in the planning chat, not by Claude Code.
 Claude Code appends one line per session: date, phases touched, anything that surprised you.
 
 2026-07-29 — Phase 0 + 0b complete. Scaffold, config, probe, extraction baseline. Surprises: `grok-4.5` doesn't follow the dated-identifier convention; INV-1003 "yesterday" returned as literal string rather than null (no hallucination); INV-1012 silent correction confirmed — `corrections[]` field needed in schema.
+
+2026-07-29 — Phase 1 complete. Schema, canonicalization, seed. Surprises: INV-1013 carries a deliberate +$50 grand-total error in BOTH the JSON and the PDF that CLAUDE.md §6 doesn't call out — this is an additional AR- finding on top of the aggregate stock overrun. INV-1011 PDF really is less complete than the txt source (no subtotal/tax line generated). 30 tests pass.

@@ -5,7 +5,7 @@ install:
 	.venv/bin/pip install -r requirements.txt
 
 seed:
-	@echo "not yet implemented"
+	.venv/bin/python -m src.store.seed
 
 probe:
 	.venv/bin/python scripts/probe.py
