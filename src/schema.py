@@ -63,7 +63,7 @@ class Money(BaseModel):
     currency: str
     amount_usd: Decimal
 
-    model_config = ConfigDict(str_strip_whitespace=True)
+    model_config = ConfigDict(str_strip_whitespace=True, frozen=True)
 
     @model_validator(mode="before")
     @classmethod
@@ -93,6 +93,8 @@ class Money(BaseModel):
 # ---------------------------------------------------------------------------
 
 class Correction(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     field_path: str
     original: str
     corrected: str
@@ -104,6 +106,12 @@ class Correction(BaseModel):
 # ---------------------------------------------------------------------------
 
 class LineItem(BaseModel):
+    # Frozen: an Invoice is frozen and derives its semantic_hash from its
+    # line items. If LineItem were mutable, invoice.line_items[0].quantity = 999
+    # would silently change the invoice's semantic identity without invalidating
+    # the cached hash.
+    model_config = ConfigDict(frozen=True)
+
     raw_item_name: str
     canonical_item: str | None = None
     quantity: int
@@ -119,6 +127,8 @@ class LineItem(BaseModel):
 # ---------------------------------------------------------------------------
 
 class AdditionalCharge(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     label: str
     amount: Money
 
@@ -128,6 +138,13 @@ class AdditionalCharge(BaseModel):
 # ---------------------------------------------------------------------------
 
 class Invoice(BaseModel):
+    # Frozen. Downstream code that needs a different Invoice constructs a new
+    # one via `.model_copy(update=...)`, which triggers `_fill_semantic_hash`
+    # again. A mutable Invoice could drift from its own semantic_hash — the
+    # hash is computed once at construction, and mutating a field after that
+    # would leave the cached value stale.
+    model_config = ConfigDict(frozen=True)
+
     # Identifiers — raw and normalized both retained
     invoice_number_raw: str
     invoice_number: str  # normalized to INV-{digits} via canonical.normalize_invoice_number
@@ -220,12 +237,19 @@ class Invoice(BaseModel):
 
     @model_validator(mode="after")
     def _fill_semantic_hash(self) -> "Invoice":
+        # `frozen=True` prevents `self.semantic_hash = ...`; bypass via
+        # `object.__setattr__` since we are still inside the validator, before
+        # the instance is exposed to any caller.
         if not self.semantic_hash:
-            self.semantic_hash = self.compute_semantic_hash(
-                self.invoice_number,
-                self.vendor_name,
-                self.line_items,
-                self.stated_total,
+            object.__setattr__(
+                self,
+                "semantic_hash",
+                self.compute_semantic_hash(
+                    self.invoice_number,
+                    self.vendor_name,
+                    self.line_items,
+                    self.stated_total,
+                ),
             )
         return self
 

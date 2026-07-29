@@ -16,8 +16,9 @@ from decimal import Decimal
 import hashlib
 
 import pytest
+from pydantic import ValidationError
 
-from src.schema import Invoice, LineItem, Money
+from src.schema import AdditionalCharge, Correction, Invoice, LineItem, Money
 
 
 # ---------------------------------------------------------------------------
@@ -82,6 +83,81 @@ def test_compute_semantic_hash_changes_when_line_items_change() -> None:
     h1 = Invoice.compute_semantic_hash("INV-X", "V", [_line("WidgetA", 6, "250")], total)
     h2 = Invoice.compute_semantic_hash("INV-X", "V", [_line("WidgetA", 5, "300")], total)
     assert h1 != h2
+
+
+# ---------------------------------------------------------------------------
+# Frozen-model invariants
+# ---------------------------------------------------------------------------
+
+def _minimal_invoice() -> Invoice:
+    return Invoice(
+        invoice_number_raw="INV-1001",
+        invoice_number="INV-1001",
+        vendor_raw="Widgets Inc.",
+        vendor_name="Widgets Inc.",
+        source_file="invoice_1001.txt",
+        source_format="txt",
+        file_hash="abc",
+        line_items=[_line("WidgetA", 6, "250")],
+        stated_total=Money(amount_native=Decimal("1500"), currency="USD"),
+    )
+
+
+def test_invoice_is_frozen() -> None:
+    """Mutating a field on a constructed Invoice must raise."""
+    inv = _minimal_invoice()
+    with pytest.raises(ValidationError):
+        inv.invoice_number = "INV-9999"
+
+
+def test_line_item_is_frozen() -> None:
+    """LineItem must be frozen too — otherwise
+    invoice.line_items[0].quantity = 999 would silently invalidate
+    semantic_hash."""
+    li = _line("WidgetA", 6, "250")
+    with pytest.raises(ValidationError):
+        li.quantity = 999
+
+
+def test_money_is_frozen() -> None:
+    m = Money(amount_native=Decimal("100"), currency="USD")
+    with pytest.raises(ValidationError):
+        m.amount_native = Decimal("999")
+
+
+def test_additional_charge_is_frozen() -> None:
+    ac = AdditionalCharge(
+        label="shipping",
+        amount=Money(amount_native=Decimal("150"), currency="USD"),
+    )
+    with pytest.raises(ValidationError):
+        ac.label = "handling"
+
+
+def test_correction_is_frozen() -> None:
+    c = Correction(field_path="date", original="2O26", corrected="2026", reason="ocr")
+    with pytest.raises(ValidationError):
+        c.reason = "changed"
+
+
+def test_semantic_hash_is_populated_on_frozen_invoice() -> None:
+    """Freeze must not defeat the model_validator that fills semantic_hash."""
+    inv = _minimal_invoice()
+    assert inv.semantic_hash != ""
+    assert len(inv.semantic_hash) == 64  # SHA-256 hex
+
+
+def test_model_copy_produces_new_hash_when_semantics_change() -> None:
+    """The idiomatic way to 'mutate' an Invoice: model_copy(update=...).
+    The new instance must recompute semantic_hash for its new fields."""
+    original = _minimal_invoice()
+    updated = original.model_copy(
+        update={
+            "stated_total": Money(amount_native=Decimal("9999"), currency="USD"),
+            "semantic_hash": "",  # clear so the validator recomputes on the copy
+        }
+    )
+    assert updated.semantic_hash != original.semantic_hash
 
 
 # ---------------------------------------------------------------------------
