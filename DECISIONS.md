@@ -197,3 +197,10 @@ Append-only. Each entry: Decision / Alternatives considered / Why + date.
 2026-07-29
 
 ---
+
+**Decision (correcting a prior entry):** The prior `PRICE_PER_1M_CACHED_INPUT = 0.50` was a guess. Replaced with `PRICE_PER_1M_CACHED_INPUT = PRICE_PER_1M_INPUT` (currently $2.00/M) as a conservative stand-in until the real cached rate is confirmed from the xAI console.
+**Alternatives considered:** Keep the $0.50 guess; set to $0 (undercount); leave the placeholder unresolved.
+**Why:** Cached tokens are always billed at or below the uncached rate in practice, so charging the uncached rate can only OVERstate cost — never understate. The prior $0.50 could go either way (over or under) depending on the real number, and any Day-2 cost claim built on it would be unfalsifiable. A stand-in that biases toward overstating cost is defensible: the reported figure is an upper bound. Replace with the confirmed rate before Phase 8 and update the corresponding test.
+2026-07-29
+
+---

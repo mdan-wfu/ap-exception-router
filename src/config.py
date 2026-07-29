@@ -17,7 +17,11 @@ LLM_MODE: str = os.environ.get("LLM_MODE", "auto")
 # Reasoning tokens are billed at the OUTPUT rate (empirically confirmed
 # 2026-07-29 by comparing total_tokens vs prompt+completion+reasoning).
 PRICE_PER_1M_INPUT: float = 2.00
-PRICE_PER_1M_CACHED_INPUT: float = 0.50  # TODO(pricing): confirm from console
+# Conservative stand-in until the console-confirmed cached rate is known:
+# use the full input rate. Cached tokens are always cheaper than uncached in
+# practice, so charging them at the uncached rate can only OVERstate cost —
+# never understate. Swap in the real rate once confirmed.
+PRICE_PER_1M_CACHED_INPUT: float = PRICE_PER_1M_INPUT
 PRICE_PER_1M_OUTPUT: float = 6.00
 
 # Financial thresholds

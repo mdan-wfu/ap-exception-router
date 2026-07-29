@@ -189,11 +189,19 @@ def test_model_call_cost_charges_output_rate_for_reasoning_tokens() -> None:
 
 
 def test_model_call_cost_uses_cached_input_rate() -> None:
-    """cached_prompt_tokens billed at PRICE_PER_1M_CACHED_INPUT ($0.50/M),
-    not the standard $2/M input rate. Uncached input = prompt - cached."""
+    """cached_prompt_tokens are billed at PRICE_PER_1M_CACHED_INPUT.
+    Currently this equals PRICE_PER_1M_INPUT as a conservative stand-in
+    (can only OVERstate cost). Swap in the real rate once console-confirmed
+    and update the expected total below to match."""
     from datetime import datetime, timezone
 
+    from src.config import PRICE_PER_1M_CACHED_INPUT, PRICE_PER_1M_INPUT
     from src.schema import ModelCall
+
+    assert PRICE_PER_1M_CACHED_INPUT == PRICE_PER_1M_INPUT, (
+        "stand-in is in effect; when the real cached rate is set, update this "
+        "test and remove this assertion"
+    )
 
     mc = ModelCall(
         requested_model="grok-4.5",
@@ -205,8 +213,8 @@ def test_model_call_cost_uses_cached_input_rate() -> None:
         latency_ms=100.0,
         timestamp=datetime(2026, 7, 29, tzinfo=timezone.utc),
     )
-    # 1M @ $0.50/M cached = $0.50
-    assert mc.cost_usd == Decimal("0.50")
+    # 1M cached tokens @ $2.00/M (stand-in) = $2.00
+    assert mc.cost_usd == Decimal(str(PRICE_PER_1M_CACHED_INPUT))
 
 
 def test_model_copy_produces_new_hash_when_semantics_change() -> None:
