@@ -120,3 +120,38 @@ Append-only. Each entry: Decision / Alternatives considered / Why + date.
 2026-07-29
 
 ---
+
+**Decision:** Cassette key is a SHA-256 over: model identifier + full serialized messages (system + user) + tool definitions + response-format schema. `max_completion_tokens` is deliberately excluded.
+**Alternatives considered:** Key on (model, first message, tool names) only; key on request-body hash including all sampling params.
+**Why:** Prompt text MUST be in the key. Editing `prompts/extractor.md` changes the messages, which changes the key, which forces a cache miss. Without this rule you spend hours debugging changes that never took effect. `max_completion_tokens` is excluded because raising the budget for a recorded response should still hit — the actual content did not change.
+2026-07-29
+
+---
+
+**Decision:** `LLM_MODE` defaults to `auto` (replay on hit, live on miss, record the result). `make demo` sets `LLM_MODE=replay` and passes `--replay` so a cold clone with no API key runs to completion with a loud error if a cassette is missing.
+**Alternatives considered:** Default to `replay` (safer, no accidental API spend) or `live` (fewer surprises during dev).
+**Why:** `auto` is the only mode that keeps the dev loop cheap (cassettes are hit most of the time) while remaining tolerant of new prompts (misses record automatically). CI/reviewer runs use `make demo`, which forces `replay` — a missing cassette on that path is a build failure, not an unexpected charge.
+2026-07-29
+
+---
+
+**Decision:** `PRICE_PER_1M_INPUT` and `PRICE_PER_1M_OUTPUT` are placeholders (0.0) with a `TODO(pricing)` comment in `src/config.py`.
+**Alternatives considered:** Guess reasonable numbers (e.g., $2/$10 per 1M).
+**Why:** Every `RunRecord.cost_usd` derives from these two constants. Inventing them means every Day-2 cost claim is fiction. Placeholders that report $0 are obviously wrong; guessed numbers are subtly wrong. Confirm from the xAI console before Phase 8 (observability). Recorded first-run smoke `pong` cassette shows `cost_usd: "0E-7"` — the placeholder is visibly firing.
+2026-07-29
+
+---
+
+**Decision:** `ModelCall.resolved_model` capture confirms `grok-4.5` currently resolves to `"grok-4.5"` on this account (visible in every recorded cassette). No dated alias exists.
+**Alternatives considered:** Trust that the alias is stable and drop the capture.
+**Why:** The capture is exactly the audit trail we need to detect a silent alias swap. If xAI later remaps `grok-4.5` to a newer or older build, the run history will show it, and Day-3 eval numbers can be compared against Day-1 numbers without ambiguity about what actually ran.
+2026-07-29
+
+---
+
+**Decision:** Cassette redaction — refuse to `put()` any payload containing `xai-[A-Za-z0-9_-]{6,}`. A committed test (`test_committed_cassettes_contain_no_credentials`) also greps the entire `data/cassettes/` directory for the same pattern and fails if anything matches.
+**Alternatives considered:** Trust that the SDK never echoes credentials into responses.
+**Why:** Defense in depth. The request payload includes user-provided message content, which could plausibly contain a leaked key at any point (someone pasting a `.env` snippet into an invoice PDF for testing). The check runs on write AND at CI, so a leak in either the recording path or a manually-edited cassette fails loudly.
+2026-07-29
+
+---

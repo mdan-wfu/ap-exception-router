@@ -1,4 +1,5 @@
-"""LLM provider layer: xAI Grok via OpenAI-compatible SDK."""
+"""LLM provider layer: xAI Grok via OpenAI-compatible SDK, with cassette record/replay."""
+from src.llm.cassette import CassetteStore, RedactionError
 from src.llm.provider import (
     CacheMissError,
     LLMCallFailed,
@@ -9,8 +10,10 @@ from src.llm.provider import (
 
 __all__ = [
     "CacheMissError",
+    "CassetteStore",
     "LLMCallFailed",
     "LLMError",
     "LLMProvider",
     "LLMResult",
+    "RedactionError",
 ]

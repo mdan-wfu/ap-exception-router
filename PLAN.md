@@ -84,10 +84,10 @@ Run a throwaway extraction against the four hardest documents, three times each,
 **Exit:** `sqlite3 reference.db` shows both tables populated; generator findings logged.
 
 ## Phase 2 — LLM layer (before any LLM call is made)
-- [ ] `provider.py` — Grok via OpenAI-compatible SDK; Claude path defined but unconfigured
-- [ ] `cassette.py` — record to `data/cassettes/`, replay offline
-- [ ] **The cassette key hashes the prompt text**, so editing a prompt forces a cache miss and a live call. Without this you will debug changes that never took effect.
-- [ ] Retry, timeout, token/latency/cost capture on every call
+- [x] `provider.py` — Grok via OpenAI-compatible SDK; Claude path defined but unconfigured
+- [x] `cassette.py` — record to `data/cassettes/`, replay offline
+- [x] **The cassette key hashes the prompt text**, so editing a prompt forces a cache miss and a live call. Without this you will debug changes that never took effect.
+- [x] Retry, timeout, token/latency/cost capture on every call
 
 **Exit:** a recorded call replays with zero network access. Every subsequent phase records as it goes.
 
@@ -207,3 +207,5 @@ Claude Code appends one line per session: date, phases touched, anything that su
 2026-07-29 — Phase 0 + 0b complete. Scaffold, config, probe, extraction baseline. Surprises: `grok-4.5` doesn't follow the dated-identifier convention; INV-1003 "yesterday" returned as literal string rather than null (no hallucination); INV-1012 silent correction confirmed — `corrections[]` field needed in schema.
 
 2026-07-29 — Phase 1 complete. Schema, canonicalization, seed. Surprises: INV-1013 carries a deliberate +$50 grand-total error in BOTH the JSON and the PDF that CLAUDE.md §6 doesn't call out — this is an additional AR- finding on top of the aggregate stock overrun. INV-1011 PDF really is less complete than the txt source (no subtotal/tax line generated). 30 tests pass.
+
+2026-07-29 — Phase 2 complete. Provider (retry + cost/latency capture) + cassette (key hashes prompt text; auto/live/replay modes; credential redaction). Live smoke round-trip works end-to-end (`pong` cassette recorded). Surprises: `grok-4.5` resolves to `grok-4.5` (not a dated build) on this account — proven by the ModelCall capture; a trivial single-word reply cost 214 input tokens (system-prompt overhead is not zero). 58 pass, 2 skip.
