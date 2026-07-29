@@ -79,7 +79,13 @@ class CassetteStore:
             "fingerprint": self._fingerprint(request),
             "content": result.content,
             "tool_calls": result.tool_calls,
-            "model_call": json.loads(result.model_call.model_dump_json()),
+            # Exclude the computed `cost_usd` field: cassettes store token
+            # counts only, and cost is recomputed at read time from current
+            # pricing. Freezing cost into a cassette makes every recording
+            # stale the moment prices change.
+            "model_call": json.loads(
+                result.model_call.model_dump_json(exclude={"cost_usd"})
+            ),
         }
         _reject_credential_leaks(payload)
         self._path(key).write_text(json.dumps(payload, indent=2, sort_keys=True))

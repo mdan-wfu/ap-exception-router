@@ -31,8 +31,10 @@ def _fake_response(
     content: str = "hello",
     tool_calls: list | None = None,
     resolved_model: str = "grok-4.5-2026-07-01",
-    tokens_in: int = 12,
-    tokens_out: int = 34,
+    prompt_tokens: int = 12,
+    completion_tokens: int = 34,
+    cached_prompt_tokens: int = 0,
+    reasoning_tokens: int = 0,
     system_fingerprint: str | None = "fp_abcdef01",
 ) -> MagicMock:
     msg = MagicMock()
@@ -41,8 +43,14 @@ def _fake_response(
     choice = MagicMock()
     choice.message = msg
     usage = MagicMock()
-    usage.prompt_tokens = tokens_in
-    usage.completion_tokens = tokens_out
+    usage.prompt_tokens = prompt_tokens
+    usage.completion_tokens = completion_tokens
+    prompt_details = MagicMock()
+    prompt_details.cached_tokens = cached_prompt_tokens
+    usage.prompt_tokens_details = prompt_details
+    completion_details = MagicMock()
+    completion_details.reasoning_tokens = reasoning_tokens
+    usage.completion_tokens_details = completion_details
     response = MagicMock()
     response.choices = [choice]
     response.usage = usage
@@ -99,8 +107,10 @@ def test_record_then_replay_round_trip(tmp_path: Path, monkeypatch) -> None:
     client = _fake_client(return_value=_fake_response(
         content="RECORDED CONTENT",
         resolved_model="grok-4.5-dated",
-        tokens_in=42,
-        tokens_out=99,
+        prompt_tokens=42,
+        cached_prompt_tokens=10,
+        completion_tokens=99,
+        reasoning_tokens=200,
     ))
     provider = LLMProvider(
         api_key="dummy", model="grok-4.5", mode="live",
@@ -113,8 +123,10 @@ def test_record_then_replay_round_trip(tmp_path: Path, monkeypatch) -> None:
     assert first.cache_hit is False
     assert first.content == "RECORDED CONTENT"
     assert first.model_call.resolved_model == "grok-4.5-dated"
-    assert first.model_call.tokens_in == 42
-    assert first.model_call.tokens_out == 99
+    assert first.model_call.prompt_tokens == 42
+    assert first.model_call.cached_prompt_tokens == 10
+    assert first.model_call.completion_tokens == 99
+    assert first.model_call.reasoning_tokens == 200
     assert first.model_call.latency_ms > 0
 
     # Switch to replay mode. The next call must not hit the API and must
@@ -128,8 +140,10 @@ def test_record_then_replay_round_trip(tmp_path: Path, monkeypatch) -> None:
     assert second.cache_hit is True
     assert second.content == first.content
     assert second.model_call.resolved_model == first.model_call.resolved_model
-    assert second.model_call.tokens_in == first.model_call.tokens_in
-    assert second.model_call.tokens_out == first.model_call.tokens_out
+    assert second.model_call.prompt_tokens == first.model_call.prompt_tokens
+    assert second.model_call.cached_prompt_tokens == first.model_call.cached_prompt_tokens
+    assert second.model_call.completion_tokens == first.model_call.completion_tokens
+    assert second.model_call.reasoning_tokens == first.model_call.reasoning_tokens
     assert second.model_call.latency_ms == first.model_call.latency_ms
     assert second.model_call.system_fingerprint == first.model_call.system_fingerprint
 

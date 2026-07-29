@@ -1,0 +1,27 @@
+{
+  "content": "4183",
+  "fingerprint": {
+    "messages": [
+      {
+        "content": "What is 47 * 89? Reply with only the number.",
+        "role": "user"
+      }
+    ],
+    "model": "grok-4.5",
+    "response_format": null,
+    "tools": null
+  },
+  "model_call": {
+    "cached_prompt_tokens": 128,
+    "completion_tokens": 2,
+    "latency_ms": 1931.2709588557482,
+    "prompt_name": "phase2_token_smoke",
+    "prompt_tokens": 220,
+    "reasoning_tokens": 63,
+    "requested_model": "grok-4.5",
+    "resolved_model": "grok-4.5",
+    "system_fingerprint": "fp_a39489019fa99b6e",
+    "timestamp": "2026-07-29T20:12:22.440022Z"
+  },
+  "tool_calls": []
+}

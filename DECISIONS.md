@@ -162,3 +162,38 @@ Append-only. Each entry: Decision / Alternatives considered / Why + date.
 2026-07-29
 
 ---
+
+**Decision:** Freeze `Invoice`, `LineItem`, `Money`, `AdditionalCharge`, and `Correction` (Pydantic `frozen=True`). Callers who need a modified invoice use `model_copy(update=...)`, which triggers the semantic-hash validator on the copy.
+**Alternatives considered:** Keep the models mutable and rely on discipline to not mutate.
+**Why:** `Invoice.semantic_hash` is computed once at construction. A mutable `Invoice` — or a mutable nested `LineItem` — allows `invoice.line_items[0].quantity = 999` to silently change the semantic identity while the cached hash keeps the old value. Freezing eliminates the drift by construction rather than by convention.
+2026-07-29
+
+---
+
+**Decision:** `ModelCall` now captures four token categories, not two: `prompt_tokens`, `cached_prompt_tokens`, `completion_tokens`, `reasoning_tokens`. Populated from `response.usage.prompt_tokens_details.cached_tokens` and `response.usage.completion_tokens_details.reasoning_tokens` respectively.
+**Alternatives considered:** Keep the two-field `tokens_in`/`tokens_out` shape and eat the granularity loss.
+**Why:** `grok-4.5` is a reasoning model. Console billing for this account shows reasoning tokens as the single largest cost line (4.7K reasoning vs 2.6K completion in one session). A two-field capture cannot express this and every cost figure downstream would be materially wrong.
+2026-07-29
+
+---
+
+**Decision:** Empirically confirmed on 2026-07-29 that `completion_tokens` does NOT include `reasoning_tokens` on xAI grok-4.5. Verified by inspecting `response.usage`: `total_tokens (233) == prompt_tokens (209) + completion_tokens (1) + reasoning_tokens (23)`. The cost formula therefore charges the output rate against `completion_tokens + reasoning_tokens`.
+**Alternatives considered:** Assume completion includes reasoning (a common convention) without verifying.
+**Why:** If we assumed inclusion and it's actually disjoint, we'd underreport cost by the reasoning fraction — which is the dominant term. If we assumed disjoint and it's actually inclusion, we'd double-count and every cost figure would inflate. The empirical check was one call; skipping it would put every subsequent number at risk.
+2026-07-29
+
+---
+
+**Decision:** Pricing constants in `src/config.py` set from console billing on 2026-07-29: `PRICE_PER_1M_INPUT = 2.00`, `PRICE_PER_1M_CACHED_INPUT = 0.50` (TODO: confirm; materially below 2.00), `PRICE_PER_1M_OUTPUT = 6.00`. Confirm against xAI's published pricing page before Phase 8.
+**Alternatives considered:** Keep the zero placeholders from the earlier Phase 2 entry.
+**Why:** Zero placeholders make every cost figure a lie by omission and would defeat the Day-2 observability rollup. Console-derived numbers are approximate but recoverable; the placeholder-only run couldn't be reconciled later.
+2026-07-29
+
+---
+
+**Decision:** `ModelCall.cost_usd` is a `@computed_field` derived at read time from `src.config` pricing. Cassettes store token counts only; `cost_usd` is excluded from `model_dump_json()` at write time.
+**Alternatives considered:** Freeze `cost_usd` into every cassette so the recorded number is exactly what was paid.
+**Why:** Cost is derived from tokens and pricing, not observed independently. Freezing it into cassettes means any later pricing correction silently invalidates every prior recording, and a demo/eval run replayed after a price update reports figures nobody can reconcile against the current rate card. Tokens are the observed quantity; cost is a calculation over them.
+2026-07-29
+
+---

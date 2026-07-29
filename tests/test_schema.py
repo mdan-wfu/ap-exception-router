@@ -147,6 +147,68 @@ def test_semantic_hash_is_populated_on_frozen_invoice() -> None:
     assert len(inv.semantic_hash) == 64  # SHA-256 hex
 
 
+def test_model_call_cost_is_derived_not_stored() -> None:
+    """cost_usd is a computed_field: it must not appear as a plain attribute
+    that could be assigned a stale value at cassette-write time."""
+    from datetime import datetime, timezone
+
+    from src.schema import ModelCall
+
+    mc = ModelCall(
+        requested_model="grok-4.5",
+        resolved_model="grok-4.5",
+        prompt_tokens=1_000_000,       # 1M non-cached input tokens
+        cached_prompt_tokens=0,
+        completion_tokens=0,
+        reasoning_tokens=0,
+        latency_ms=100.0,
+        timestamp=datetime(2026, 7, 29, tzinfo=timezone.utc),
+    )
+    # At $2/M input, this is exactly $2.
+    assert mc.cost_usd == Decimal("2.00")
+
+
+def test_model_call_cost_charges_output_rate_for_reasoning_tokens() -> None:
+    """Reasoning tokens are billed at the OUTPUT rate. If completion
+    already included reasoning we would double-count them."""
+    from datetime import datetime, timezone
+
+    from src.schema import ModelCall
+
+    mc = ModelCall(
+        requested_model="grok-4.5",
+        resolved_model="grok-4.5",
+        prompt_tokens=0,
+        cached_prompt_tokens=0,
+        completion_tokens=500_000,     # 0.5M completion at $6/M = $3.00
+        reasoning_tokens=500_000,      # 0.5M reasoning at $6/M = $3.00
+        latency_ms=100.0,
+        timestamp=datetime(2026, 7, 29, tzinfo=timezone.utc),
+    )
+    assert mc.cost_usd == Decimal("6.00")
+
+
+def test_model_call_cost_uses_cached_input_rate() -> None:
+    """cached_prompt_tokens billed at PRICE_PER_1M_CACHED_INPUT ($0.50/M),
+    not the standard $2/M input rate. Uncached input = prompt - cached."""
+    from datetime import datetime, timezone
+
+    from src.schema import ModelCall
+
+    mc = ModelCall(
+        requested_model="grok-4.5",
+        resolved_model="grok-4.5",
+        prompt_tokens=1_000_000,        # total input 1M
+        cached_prompt_tokens=1_000_000, # all of it cached
+        completion_tokens=0,
+        reasoning_tokens=0,
+        latency_ms=100.0,
+        timestamp=datetime(2026, 7, 29, tzinfo=timezone.utc),
+    )
+    # 1M @ $0.50/M cached = $0.50
+    assert mc.cost_usd == Decimal("0.50")
+
+
 def test_model_copy_produces_new_hash_when_semantics_change() -> None:
     """The idiomatic way to 'mutate' an Invoice: model_copy(update=...).
     The new instance must recompute semantic_hash for its new fields."""

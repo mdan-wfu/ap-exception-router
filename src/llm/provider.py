@@ -20,7 +20,6 @@ from __future__ import annotations
 import json
 import time
 from datetime import datetime, timezone
-from decimal import Decimal
 from typing import Any, TYPE_CHECKING
 
 from openai import (
@@ -35,8 +34,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from src.config import (
     GROK_MODEL,
     LLM_MODE,
-    PRICE_PER_1M_INPUT,
-    PRICE_PER_1M_OUTPUT,
     XAI_API_KEY,
 )
 from src.schema import ModelCall
@@ -91,13 +88,6 @@ _RETRYABLE: tuple[type[Exception], ...] = (
     RateLimitError,
     InternalServerError,
 )
-
-
-def _cost_usd(tokens_in: int, tokens_out: int) -> Decimal:
-    return (
-        Decimal(str(tokens_in)) / Decimal("1000000") * Decimal(str(PRICE_PER_1M_INPUT))
-        + Decimal(str(tokens_out)) / Decimal("1000000") * Decimal(str(PRICE_PER_1M_OUTPUT))
-    )
 
 
 def _call_with_retry(
@@ -242,18 +232,26 @@ class LLMProvider:
             })
 
         usage = getattr(response, "usage", None)
-        tokens_in = getattr(usage, "prompt_tokens", 0) if usage else 0
-        tokens_out = getattr(usage, "completion_tokens", 0) if usage else 0
+        prompt_tokens = getattr(usage, "prompt_tokens", 0) if usage else 0
+        completion_tokens = getattr(usage, "completion_tokens", 0) if usage else 0
+
+        # Detail sub-objects: xAI populates these for cached prompt tokens and
+        # reasoning tokens. Both default to 0 if the provider omits them.
+        prompt_details = getattr(usage, "prompt_tokens_details", None) if usage else None
+        completion_details = getattr(usage, "completion_tokens_details", None) if usage else None
+        cached_prompt_tokens = getattr(prompt_details, "cached_tokens", 0) or 0 if prompt_details else 0
+        reasoning_tokens = getattr(completion_details, "reasoning_tokens", 0) or 0 if completion_details else 0
 
         model_call = ModelCall(
             requested_model=self.model,
             resolved_model=getattr(response, "model", self.model),
             system_fingerprint=getattr(response, "system_fingerprint", None),
             prompt_name=prompt_name,
-            tokens_in=tokens_in,
-            tokens_out=tokens_out,
+            prompt_tokens=prompt_tokens,
+            cached_prompt_tokens=cached_prompt_tokens,
+            completion_tokens=completion_tokens,
+            reasoning_tokens=reasoning_tokens,
             latency_ms=latency_ms,
-            cost_usd=_cost_usd(tokens_in, tokens_out),
             timestamp=datetime.now(timezone.utc),
         )
 

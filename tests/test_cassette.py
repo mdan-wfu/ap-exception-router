@@ -1,6 +1,5 @@
 """Cassette store: key stability, prompt-edit-forces-miss, redaction."""
 from datetime import datetime, timezone
-from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -32,10 +31,11 @@ def _fake_result(content: str = "hello") -> LLMResult:
         requested_model="grok-4.5",
         resolved_model="grok-4.5-resolved",
         prompt_name=None,
-        tokens_in=10,
-        tokens_out=20,
+        prompt_tokens=10,
+        cached_prompt_tokens=3,
+        completion_tokens=20,
+        reasoning_tokens=15,
         latency_ms=123.4,
-        cost_usd=Decimal("0.0001"),
         timestamp=datetime(2026, 7, 29, 12, 0, 0, tzinfo=timezone.utc),
     )
     return LLMResult(content=content, tool_calls=[], model_call=mc)
@@ -116,9 +116,13 @@ def test_put_then_get_round_trips(tmp_path: Path) -> None:
     assert payload is not None
     assert payload["content"] == "extracted content"
     assert payload["model_call"]["resolved_model"] == "grok-4.5-resolved"
-    assert payload["model_call"]["tokens_in"] == 10
-    assert payload["model_call"]["tokens_out"] == 20
+    assert payload["model_call"]["prompt_tokens"] == 10
+    assert payload["model_call"]["cached_prompt_tokens"] == 3
+    assert payload["model_call"]["completion_tokens"] == 20
+    assert payload["model_call"]["reasoning_tokens"] == 15
     assert payload["model_call"]["latency_ms"] == 123.4
+    # Cost is a derived property; must NOT be frozen into the cassette
+    assert "cost_usd" not in payload["model_call"]
 
 
 def test_cassette_filename_is_the_key(tmp_path: Path) -> None:

@@ -25,9 +25,14 @@ from decimal import Decimal
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
-from src.config import FX_RATES
+from src.config import (
+    FX_RATES,
+    PRICE_PER_1M_CACHED_INPUT,
+    PRICE_PER_1M_INPUT,
+    PRICE_PER_1M_OUTPUT,
+)
 
 # Amounts are quantized to this precision before hashing so that "250" and
 # "250.00" produce the same semantic hash. Cent precision is not enough:
@@ -285,14 +290,23 @@ class Decision(BaseModel):
 class ModelCall(BaseModel):
     """A single LLM API call.
 
-    All three identifiers are stored:
+    Identifiers:
       - `requested_model` — what we asked for
-      - `resolved_model`  — what `response.model` echoed back (on xAI, this
-                             is the alias verbatim; it does NOT prove which
-                             weights served the request)
-      - `system_fingerprint` — the opaque backend build identifier; the ONLY
-                             field that would detect a silent alias remap.
-                             None if the provider omits it.
+      - `resolved_model`  — what `response.model` echoed back (on xAI, the
+                             alias verbatim; does NOT prove which weights served)
+      - `system_fingerprint` — opaque backend build id; the only field that
+                             would detect a silent alias remap. None if omitted.
+
+    Tokens: four categories, all captured, none derived. Empirically on
+    grok-4.5 (2026-07-29):
+      total_tokens == prompt_tokens + completion_tokens + reasoning_tokens.
+    Meaning `completion_tokens` does NOT include `reasoning_tokens` — the two
+    are disjoint. Cost formula depends on this; do not merge them.
+
+    `cost_usd` is a COMPUTED property, not a stored field. Recorded cassettes
+    persist only token counts; cost is recomputed at read time against current
+    `src.config` pricing. Freezing a `cost_usd` into a cassette would silently
+    invalidate every prior recording the moment prices change.
     """
     model_config = ConfigDict(protected_namespaces=())
 
@@ -300,11 +314,34 @@ class ModelCall(BaseModel):
     resolved_model: str
     system_fingerprint: str | None = None
     prompt_name: str | None = None
-    tokens_in: int
-    tokens_out: int
+
+    # Token categories captured directly from `response.usage` and its detail
+    # sub-objects. All default to 0 for backward compatibility with providers
+    # that omit some detail objects.
+    prompt_tokens: int = 0
+    cached_prompt_tokens: int = 0
+    completion_tokens: int = 0
+    reasoning_tokens: int = 0
+
     latency_ms: float
-    cost_usd: Decimal = Decimal("0")
     timestamp: datetime
+
+    @computed_field  # type: ignore[misc]
+    @property
+    def cost_usd(self) -> Decimal:
+        """Derived at read time from current pricing. Never stored.
+
+        Uncached input tokens = prompt_tokens - cached_prompt_tokens.
+        Output-billed tokens  = completion_tokens + reasoning_tokens.
+        """
+        uncached_input = max(self.prompt_tokens - self.cached_prompt_tokens, 0)
+        output_billed = self.completion_tokens + self.reasoning_tokens
+        million = Decimal("1000000")
+        return (
+            Decimal(uncached_input) / million * Decimal(str(PRICE_PER_1M_INPUT))
+            + Decimal(self.cached_prompt_tokens) / million * Decimal(str(PRICE_PER_1M_CACHED_INPUT))
+            + Decimal(output_billed) / million * Decimal(str(PRICE_PER_1M_OUTPUT))
+        )
 
 
 class ToolCall(BaseModel):

@@ -12,13 +12,13 @@ GROK_MODEL: str = os.environ.get("GROK_MODEL", "")
 # both with and without a fresh API key.
 LLM_MODE: str = os.environ.get("LLM_MODE", "auto")
 
-# Pricing — USD per million tokens. Populated from the xAI console pricing
-# page; kept at 0.0 as clearly-flagged placeholders until confirmed.
-# TODO(pricing): confirm PRICE_PER_1M_INPUT / PRICE_PER_1M_OUTPUT for grok-4.5
-# from https://console.x.ai and update. Every RunRecord's cost_usd depends
-# on these two values; leaving them at zero underreports cost.
-PRICE_PER_1M_INPUT: float = 0.0
-PRICE_PER_1M_OUTPUT: float = 0.0
+# Pricing — USD per million tokens for grok-4.5. Derived from console billing
+# on 2026-07-29; confirm against xAI's published pricing page before Phase 8.
+# Reasoning tokens are billed at the OUTPUT rate (empirically confirmed
+# 2026-07-29 by comparing total_tokens vs prompt+completion+reasoning).
+PRICE_PER_1M_INPUT: float = 2.00
+PRICE_PER_1M_CACHED_INPUT: float = 0.50  # TODO(pricing): confirm from console
+PRICE_PER_1M_OUTPUT: float = 6.00
 
 # Financial thresholds
 APPROVAL_THRESHOLD_USD: float = 10_000
