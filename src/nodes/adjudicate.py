@@ -59,6 +59,8 @@ def adjudicate(state: GraphState) -> dict:
     agent_result = run_agent_loop(
         prompt, AdjudicatorOutput, prompt_name=prompt_name,
         tool_cache=tool_cache_in,
+        invoice_tool_calls_used=len(state.get("tool_calls", [])),
+        invoice_model_calls_used=len(state.get("model_calls", [])),
     )
 
     model_output = agent_result.parsed

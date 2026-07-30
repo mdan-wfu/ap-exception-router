@@ -482,3 +482,14 @@ INV-1012's rationale post-fix still names the FastShip dormant-relationship chai
 2026-07-30
 
 ---
+
+**Decision:** Per-invoice circuit breaker on the agent loop. `MAX_TOOL_CALLS_PER_INVOICE = 12` and `MAX_MODEL_CALLS_PER_INVOICE = 8`. Enforced in `src/llm/agent_loop.py::run_agent_loop` (before each API call and before each tool execution) and in `src/nodes/scribe.py` (before the single LLM call scribe makes). On breach, raise `CircuitBreakerTripped` — a typed exception naming which cap tripped and inside which node. The graph run aborts immediately; no partial decision is returned; downstream nodes do not run.
+
+**This is a SAFETY RAIL against runaway spend, not an intended operating limit.** A reasoning model that recurses through tool calls or an infinite critic loop could otherwise burn tokens unbounded. If a legitimate run trips one of these caps, the caps are what needs raising, not the breaker removed. Removing the breaker to make a run complete is the wrong instinct — the right move is to understand why it trips and either fix the loop or lift the cap deliberately.
+
+**Live verification on INV-1012 (2026-07-30):** the run tripped the model-call cap in `critic_round_2` after 8 model calls had been made, wall clock 116.7s. No decision was produced because the run aborted mid-loop. The 8 completed calls, at 3 calls per agent node (2 investigation + 1 synthesis), account for the initial adjudicate + critic round 1 + revised adjudicate; critic round 2's first call would have been the 9th and was blocked. Cassettes for the 8 completed calls are recorded on disk — they are partial-run recordings and future replays that need INV-1012 will need cassettes for the missing steps or a raised cap. Ordinary tools tests (`tests/test_agents.py`) monkeypatch the module-level cap constants to 999 via `graph_llm_fake` in `tests/conftest.py` because the mocked provider generates 2 model calls per agent node and would otherwise trip on multi-round critic scenarios that the tests are validating. The nodes read the cap through the module attribute at call time (`agent_loop.MAX_MODEL_CALLS_PER_INVOICE`) so monkeypatch flows through; `run_agent_loop`'s caps default to `None` and resolve via `if X is None: X = MAX_...` for the same reason.
+
+**Two new tests in `tests/test_agents.py`** lock the breaker behaviour under mocked providers: `test_circuit_breaker_trips_on_model_cap` and `test_circuit_breaker_trips_on_tool_cap`.
+2026-07-30
+
+---

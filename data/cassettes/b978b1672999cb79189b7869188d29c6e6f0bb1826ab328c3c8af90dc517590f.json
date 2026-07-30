@@ -1,5 +1,5 @@
 {
-  "content": "{\"invoice_number_raw\":\"INV 1012\",\"vendor_raw\":\"QuickShip Distributers\",\"vendor_claims\":[\"(formerly FastShip Ltd.)\"],\"vendor_address\":null,\"vendor_email\":null,\"date_raw\":\"26-Jan-2O26\",\"invoice_date\":\"2026-01-26\",\"due_date_raw\":\"25-Feb-2026\",\"due_date\":\"2026-02-25\",\"currency\":\"USD\",\"line_items\":[{\"raw_item_name\":\"Widget A\",\"quantity\":12,\"unit_price_amount\":250,\"line_amount\":3000.0,\"note\":null,\"confidence\":1.0},{\"raw_item_name\":\"WidgetB\",\"quantity\":7,\"unit_price_amount\":500,\"line_amount\":3500.0,\"note\":null,\"confidence\":0.9},{\"raw_item_name\":\"Gadget X\",\"quantity\":4,\"unit_price_amount\":750,\"line_amount\":3000.0,\"note\":null,\"confidence\":1.0}],\"additional_charges\":[],\"stated_subtotal\":9500.0,\"stated_tax\":475.0,\"stated_total\":9975.0,\"payment_terms\":\"Net 30\",\"references\":[\"PO-20260115\"],\"notes\":\"Deliver to warehouse dock B. Contact Jim at ext 4421 with questions.\",\"corrections\":[{\"field_path\":\"invoice_date\",\"original\":\"2O26\",\"corrected\":\"2026\",\"reason\":\"OCR: letter O replaced by digit 0 in date token\"},{\"field_path\":\"line_items[1].line_amount\",\"original\":\"$3,500.O0\",\"corrected\":\"$3,500.00\",\"reason\":\"OCR: letter O replaced by digit 0 in currency token\"}],\"extraction_confidence\":0.92}",
+  "content": "{\n  \"invoice_number_raw\": \"INV 1012\",\n  \"vendor_raw\": \"QuickShip Distributers\",\n  \"vendor_claims\": [\"(formerly FastShip Ltd.)\"],\n  \"vendor_address\": null,\n  \"vendor_email\": null,\n  \"date_raw\": \"26-Jan-2O26\",\n  \"invoice_date\": \"2026-01-26\",\n  \"due_date_raw\": \"25-Feb-2026\",\n  \"due_date\": \"2026-02-25\",\n  \"currency\": \"USD\",\n  \"line_items\": [\n    {\n      \"raw_item_name\": \"Widget A\",\n      \"quantity\": 12,\n      \"unit_price_amount\": 250,\n      \"line_amount\": 3000.00,\n      \"note\": null,\n      \"confidence\": 1.0\n    },\n    {\n      \"raw_item_name\": \"WidgetB\",\n      \"quantity\": 7,\n      \"unit_price_amount\": 500,\n      \"line_amount\": 3500.00,\n      \"note\": null,\n      \"confidence\": 0.9\n    },\n    {\n      \"raw_item_name\": \"Gadget X\",\n      \"quantity\": 4,\n      \"unit_price_amount\": 750,\n      \"line_amount\": 3000.00,\n      \"note\": null,\n      \"confidence\": 1.0\n    }\n  ],\n  \"additional_charges\": [],\n  \"stated_subtotal\": 9500.00,\n  \"stated_tax\": 475.00,\n  \"stated_total\": 9975.00,\n  \"payment_terms\": \"Net 30\",\n  \"references\": [\"PO-20260115\"],\n  \"notes\": \"Deliver to warehouse dock B. Contact Jim at ext 4421 with questions.\",\n  \"corrections\": [\n    {\n      \"field_path\": \"invoice_date\",\n      \"original\": \"26-Jan-2O26\",\n      \"corrected\": \"2026-01-26\",\n      \"reason\": \"OCR: letter O replaced by digit 0 in date token\"\n    },\n    {\n      \"field_path\": \"line_items[1].line_amount\",\n      \"original\": \"$3,500.O0\",\n      \"corrected\": \"$3,500.00\",\n      \"reason\": \"OCR: letter O replaced by digit 0 in currency token\"\n    }\n  ],\n  \"extraction_confidence\": 0.95\n}",
   "fingerprint": {
     "messages": [
       {
@@ -325,15 +325,15 @@
   },
   "model_call": {
     "cached_prompt_tokens": 128,
-    "completion_tokens": 411,
-    "latency_ms": 19777.74866577238,
+    "completion_tokens": 569,
+    "latency_ms": 14630.839833058417,
     "prompt_name": "extractor",
     "prompt_tokens": 2430,
-    "reasoning_tokens": 1358,
+    "reasoning_tokens": 776,
     "requested_model": "grok-4.5",
     "resolved_model": "grok-4.5",
     "system_fingerprint": "fp_a39489019fa99b6e",
-    "timestamp": "2026-07-30T03:10:13.816622Z"
+    "timestamp": "2026-07-30T20:17:23.195292Z"
   },
   "tool_calls": []
 }

@@ -41,6 +41,19 @@ from src.tools import TOOLS, TOOLS_BY_NAME
 
 MAX_INVESTIGATION_TURNS = 3
 
+# Per-invoice circuit breakers. SAFETY RAILS against runaway spend (a reasoning
+# model looping through tool calls or agent nodes), not intended operating
+# limits. If a legitimate run trips one of these, the caps are what needs
+# raising, not the breaker removed. See DECISIONS.md.
+MAX_TOOL_CALLS_PER_INVOICE = 12
+MAX_MODEL_CALLS_PER_INVOICE = 8
+
+
+class CircuitBreakerTripped(Exception):
+    """Per-invoice model-call or tool-call cap exceeded. Aborts the run
+    immediately — do not continue to remaining nodes."""
+
+
 _T = TypeVar("_T", bound=BaseModel)
 
 _provider: LLMProvider | None = None
@@ -102,7 +115,17 @@ def run_agent_loop(
     *,
     max_investigation_turns: int = MAX_INVESTIGATION_TURNS,
     tool_cache: dict[str, Any] | None = None,
+    invoice_tool_calls_used: int = 0,
+    invoice_model_calls_used: int = 0,
+    max_tool_calls_per_invoice: int | None = None,
+    max_model_calls_per_invoice: int | None = None,
 ) -> AgentResult:
+    # Resolve caps at call time so tests can monkeypatch the module constants
+    if max_tool_calls_per_invoice is None:
+        max_tool_calls_per_invoice = MAX_TOOL_CALLS_PER_INVOICE
+    if max_model_calls_per_invoice is None:
+        max_model_calls_per_invoice = MAX_MODEL_CALLS_PER_INVOICE
+
     provider = get_provider()
     messages: list[dict[str, Any]] = [
         {"role": "user", "content": initial_prompt},
@@ -114,11 +137,28 @@ def run_agent_loop(
     investigation_content: str = ""
     cache: dict[str, Any] = dict(tool_cache) if tool_cache else {}
 
+    def _check_model_budget() -> None:
+        used = invoice_model_calls_used + len(model_calls_recorded)
+        if used >= max_model_calls_per_invoice:
+            raise CircuitBreakerTripped(
+                f"per-invoice model-call cap ({max_model_calls_per_invoice}) "
+                f"tripped in {prompt_name}; {used} model calls already made."
+            )
+
+    def _check_tool_budget() -> None:
+        used = invoice_tool_calls_used + len(tool_calls_recorded)
+        if used >= max_tool_calls_per_invoice:
+            raise CircuitBreakerTripped(
+                f"per-invoice tool-call cap ({max_tool_calls_per_invoice}) "
+                f"tripped in {prompt_name}; {used} tool calls already made."
+            )
+
     # ---- Phase 1: INVESTIGATION ---------------------------------------
     cap_reached = False
     turns_fired = 0
     for turn in range(max_investigation_turns):
         turns_fired = turn + 1
+        _check_model_budget()   # abort before the API call if we'd exceed cap
         result = provider.chat(
             messages,
             tools=tools_schema,
@@ -138,6 +178,7 @@ def run_agent_loop(
             content=result.content, tool_calls=result.tool_calls,
         ))
         for tc in result.tool_calls:
+            _check_tool_budget()   # abort before this tool execution if we'd exceed cap
             key = cache_key(tc["name"], tc["arguments"])
             if key in cache:
                 # Cache hit: same tool + args already executed this run
@@ -188,6 +229,7 @@ def run_agent_loop(
             "have all the information you need."
         ),
     })
+    _check_model_budget()   # abort before synthesis if we'd exceed cap
     synthesis = provider.chat(
         messages,
         response_schema=response_schema,

@@ -49,6 +49,8 @@ def critique(state: GraphState) -> dict:
     agent_result = run_agent_loop(
         prompt, CriticOutput, prompt_name=f"critic_round_{round_num}",
         tool_cache=tool_cache_in,
+        invoice_tool_calls_used=len(state.get("tool_calls", [])),
+        invoice_model_calls_used=len(state.get("model_calls", [])),
     )
 
     if agent_result.parsed is None:

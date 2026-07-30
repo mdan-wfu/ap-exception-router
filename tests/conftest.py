@@ -87,14 +87,23 @@ def _synth_for(schema_cls):
 
 
 @pytest.fixture
-def graph_llm_fake():
-    """Install the fake provider for the duration of one test."""
-    from src.llm.agent_loop import get_provider, set_provider
+def graph_llm_fake(monkeypatch):
+    """Install the fake provider and RAISE the per-invoice circuit-breaker caps
+    for the duration of one test.
+
+    Rationale: the fake provider spends 2 model calls per agent node
+    (investigation turn 1 + synthesis), so a two-round critic loop consumes
+    more than the live-run cap of 8. Graph structural tests need the loop to
+    complete; the breaker is meant to guard real spend, not the fake."""
+    from src.llm import agent_loop
+    monkeypatch.setattr(agent_loop, "MAX_MODEL_CALLS_PER_INVOICE", 999)
+    monkeypatch.setattr(agent_loop, "MAX_TOOL_CALLS_PER_INVOICE", 999)
+
     original = None
     try:
-        original = get_provider()
+        original = agent_loop.get_provider()
     except Exception:
         original = None
-    set_provider(_GraphFakeProvider())
+    agent_loop.set_provider(_GraphFakeProvider())
     yield
-    set_provider(original) if original is not None else None
+    agent_loop.set_provider(original) if original is not None else None

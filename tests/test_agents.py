@@ -330,6 +330,59 @@ def test_agent_loop_serves_cache_hit_at_zero_latency(restore_provider):
     assert 0.0 in latencies, f"expected a cache hit at latency 0.0; got {latencies}"
 
 
+def test_circuit_breaker_trips_on_model_cap(restore_provider):
+    from src.llm.agent_loop import CircuitBreakerTripped, run_agent_loop
+
+    class _AnyResponse:
+        def chat(self, messages, response_schema=None, tools=None, prompt_name=None):
+            r = MagicMock()
+            r.model_call = _fake_model_call()
+            r.content = ""; r.tool_calls = []; r.cache_hit = False
+            r.parsed = adj_mod.AdjudicatorOutput(
+                outcome="APPROVE", rationale="x", confidence=1.0,
+            ) if response_schema is adj_mod.AdjudicatorOutput else None
+            return r
+    set_provider(_AnyResponse())
+
+    with pytest.raises(CircuitBreakerTripped) as exc:
+        run_agent_loop(
+            "test", adj_mod.AdjudicatorOutput, prompt_name="test",
+            invoice_model_calls_used=8,       # at MAX_MODEL_CALLS_PER_INVOICE
+            invoice_tool_calls_used=0,
+        )
+    assert "model-call cap" in str(exc.value)
+
+
+def test_circuit_breaker_trips_on_tool_cap(restore_provider):
+    from src.llm.agent_loop import CircuitBreakerTripped, run_agent_loop
+
+    class _ToolThenAnswer:
+        def __init__(self):
+            self.count = 0
+        def chat(self, messages, response_schema=None, tools=None, prompt_name=None):
+            self.count += 1
+            r = MagicMock()
+            r.model_call = _fake_model_call()
+            r.content = ""
+            r.cache_hit = False
+            r.tool_calls = [{
+                "id": f"call_{self.count}",
+                "name": "get_item_reference",
+                "arguments": {"item": f"Item_{self.count}"},
+            }]
+            r.parsed = None
+            return r
+    set_provider(_ToolThenAnswer())
+
+    with pytest.raises(CircuitBreakerTripped) as exc:
+        run_agent_loop(
+            "test", adj_mod.AdjudicatorOutput, prompt_name="test",
+            invoice_tool_calls_used=12,       # at MAX_TOOL_CALLS_PER_INVOICE
+            invoice_model_calls_used=0,
+        )
+    assert "tool-call cap" in str(exc.value)
+
+
 def test_agent_loop_receives_and_returns_cache(restore_provider):
     """A caller can seed the cache; the returned cache contains seeded entries."""
     from src.llm.agent_loop import run_agent_loop, cache_key
