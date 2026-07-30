@@ -1,7 +1,9 @@
 """Graph structure + reducer semantics.
 
-Zero API calls; deterministic adapters and validators throughout, so no
-cassette dependency. The Phase 5c LLM agents will land as separate tests.
+Zero API calls: extraction hits cassettes; agent nodes are backed by the
+fake provider from `conftest.py::graph_llm_fake`. Tests check structural
+invariants (node sequence, critic firing, reducer semantics, batch dedup)
+which do not depend on the LLM's decision quality.
 """
 from pathlib import Path
 
@@ -11,6 +13,12 @@ from src.graph import build_graph
 from src.graph_state import GraphState
 from src.schema import Finding, Outcome, Severity
 from src.validators import find_duplicates
+
+
+# Autouse: every test in this module uses the in-process fake provider.
+@pytest.fixture(autouse=True)
+def _install_fake_llm(graph_llm_fake):
+    yield
 
 
 @pytest.fixture
@@ -24,7 +32,11 @@ def _invoke(graph, source_path, seeded=None):
         "source_path": source_path,
         "findings": list(seeded) if seeded else [],
         "nodes_fired": [],
+        "model_calls": [],
+        "tool_calls": [],
+        "critic_challenges": [],
         "critic_rounds": 0,
+        "tool_result_cache": {},
     }
     return graph.invoke(initial)
 
@@ -37,18 +49,19 @@ def test_graph_compiles(graph) -> None:
     assert graph is not None
 
 
-def test_single_invoice_traverses_expected_nodes(graph) -> None:
-    """A clean invoice: triage -> validate -> policy_gate -> adjudicate ->
-    route_outcome (no critic, no scribe, APPROVE)."""
+def test_single_invoice_traverses_deterministic_prefix(graph) -> None:
+    """Every run passes through the deterministic prefix in this order, in
+    both APPROVE and non-APPROVE paths. Fake provider returns ESCALATE so
+    the tail below routes to scribe -> route_outcome."""
     state = _invoke(graph, "data/invoices/invoice_1001.txt")
-    assert state.get("nodes_fired") == [
-        "triage", "validate", "policy_gate", "adjudicate", "route_outcome",
-    ]
+    fired = state.get("nodes_fired", [])
+    assert fired[:4] == ["triage", "validate", "policy_gate", "adjudicate"]
+    assert fired[-1] == "route_outcome"
 
 
 def test_single_invoice_produces_terminal_outcome(graph) -> None:
     state = _invoke(graph, "data/invoices/invoice_1001.txt")
-    assert state.get("terminal_status") == Outcome.APPROVE
+    assert state.get("terminal_status") is not None
     assert state.get("decision") is not None
 
 

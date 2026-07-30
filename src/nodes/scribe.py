@@ -17,7 +17,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from src.graph_state import GraphState
-from src.nodes._llm_turn import get_provider
+from src.llm.agent_loop import get_provider
 from src.nodes.adjudicate import _invoice_summary
 from src.schema import Outcome
 

@@ -118,5 +118,6 @@ def run_one(source_path: str, graph=None, thread_id: str | None = None) -> Graph
         "tool_calls": [],
         "critic_challenges": [],
         "critic_rounds": 0,
+        "tool_result_cache": {},
     }
     return graph.invoke(initial, config=config)

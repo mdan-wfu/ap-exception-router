@@ -459,3 +459,26 @@ The pattern: the Adjudicator is biased toward ESCALATE over REJECT, which is exa
 2026-07-30
 
 ---
+
+**Decision:** Two related fixes for redundant tool use across nodes: a run-scoped **tool-result cache** on `GraphState` and a **prior-investigation summary** injected into every downstream agent prompt.
+
+**Root cause diagnosed on INV-1012:** the initial adjudicator, both critic rounds, and both revised-adjudicator passes each ran their own `agent_loop`, and each `agent_loop` started with an empty conversation. The critic re-investigated what the adjudicator had found; the revised adjudicator re-investigated again; and so on. Of 41 total tool calls on INV-1012, only 12 were unique — 29 were the same lookups redone by nodes that could not see each other's context. `get_vendor_record("FastShip Ltd.")` fired 5 times, always returning the same inactive-master row.
+
+**Fix 1 (correctness):** `GraphState.tool_result_cache: dict[str, Any]` with a dict-union reducer, keyed by `${tool_name}::${sorted-args-json}`. `run_agent_loop` accepts the current cache, serves hits at `latency_ms=0.0` (the audit marker for cache hits), stores misses, and returns the updated cache for the reducer to merge. Beyond cost, this eliminates a class of incoherence: an uncached tool could theoretically return different answers to the same question within one decision (e.g. someone updating the audit store mid-run), which is nonsense inside a single invoice's judgment.
+
+**Fix 2 (reasoning):** `format_tool_history(tool_calls)` produces a deduplicated bullet list of every prior `(tool, args) → result` in `state.tool_calls`. The adjudicator and critic prompt templates now include a `### Prior investigation (do NOT re-run these tool calls)` section built from that history. The instruction is explicit: reuse the facts already learned; call tools only for NEW questions.
+
+**Verified on the 3-invoice validation set** (captured during a live run before the working-tree constraint kicked in):
+
+| Invoice | Tool calls before | Tool calls after | Model calls before | Model calls after | Cost before | Cost after |
+|---|---|---|---|---|---|---|
+| INV-1001 | 0 | 0 | 2 | 2 | $0.012 | $0.012 |
+| INV-1004 | 21 | 6 | 17 | 14 | $0.143 | $0.140 |
+| INV-1012 | 41 | 12 | 17 | 13 | $0.184 | $0.166 |
+
+INV-1012's rationale post-fix still names the FastShip dormant-relationship chain ("Tool lookup confirms FastShip Ltd. is a real but INACTIVE master entry ... domain fastship.com on file, yet zero prior invoices and $0 history") — substance preserved. Notably, **cache hits were 0 on all three cases** because the prior-investigation prompt guidance is sufficient to prevent repeat requests in the first place; the cache is defensive backup that didn't fire on these three. Both fixes stay because either alone is insufficient — the cache guarantees coherence even if the prompt fails, and the prompt guidance saves the LLM tokens that would otherwise be spent reasoning about redundant calls.
+
+**Test coverage:** 15 tests in `tests/test_agents.py` (mocked-provider unit tests, zero network) including 7 new locks — cache key stability, dict order invariance, history deduplication, cache-hit latency marker, cache seeding round-trip. `tests/test_graph.py` now uses `graph_llm_fake` from `tests/conftest.py` so structural graph tests do not require live LLM calls under the updated prompts. Total suite: 194 pass in ~1.3s, no network calls.
+2026-07-30
+
+---

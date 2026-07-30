@@ -11,7 +11,11 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 from src.graph_state import GraphState
-from src.nodes._llm_turn import MAX_TOOL_TURNS, run_llm_with_tools
+from src.llm.agent_loop import (
+    MAX_INVESTIGATION_TURNS,
+    format_tool_history,
+    run_agent_loop,
+)
 from src.nodes.adjudicate import _invoice_summary
 
 PROMPT_PATH = Path(__file__).resolve().parents[2] / "prompts" / "critic.md"
@@ -36,32 +40,36 @@ def critique(state: GraphState) -> dict:
     findings = state.get("findings", [])
     decision = state.get("decision")
     round_num = state.get("critic_rounds", 0) + 1
+    prior_investigation = format_tool_history(state.get("tool_calls", []))
+    tool_cache_in = state.get("tool_result_cache", {})
 
-    context = _build_context(invoice, findings, decision)
+    context = _build_context(invoice, findings, decision, prior_investigation)
     prompt = _load_prompt().replace("<<CONTEXT>>", context)
 
-    turn_result = run_llm_with_tools(
+    agent_result = run_agent_loop(
         prompt, CriticOutput, prompt_name=f"critic_round_{round_num}",
+        tool_cache=tool_cache_in,
     )
 
-    if turn_result.parsed is None:
+    if agent_result.parsed is None:
         challenge = (
-            f"Critic could not produce a structured challenge within "
-            f"{MAX_TOOL_TURNS} turns; the Adjudicator's decision stands unchallenged."
+            f"Critic investigation cap ({MAX_INVESTIGATION_TURNS}) reached "
+            f"without a structured challenge; the Adjudicator's decision stands."
         )
     else:
-        challenge = turn_result.parsed.challenge
+        challenge = agent_result.parsed.challenge
 
     return {
         "critic_challenges": [challenge],
         "critic_rounds": round_num,
-        "model_calls": turn_result.model_calls,
-        "tool_calls": turn_result.tool_calls,
+        "model_calls": agent_result.model_calls,
+        "tool_calls": agent_result.tool_calls,
+        "tool_result_cache": agent_result.tool_cache,
         "nodes_fired": [f"critique:round_{round_num}"],
     }
 
 
-def _build_context(invoice, findings, decision) -> str:
+def _build_context(invoice, findings, decision, prior_investigation: str) -> str:
     parts = [
         "### Adjudicator decision",
         json.dumps({
@@ -80,4 +88,15 @@ def _build_context(invoice, findings, decision) -> str:
     else:
         for f in findings:
             parts.append(f"- {f.code} [{f.severity.value}] {f.message}")
+    if prior_investigation:
+        parts.append("")
+        parts.append("### Prior investigation (do NOT re-run these tool calls)")
+        parts.append(
+            "The Adjudicator already ran these tool calls. Their results are "
+            "in context below. Do NOT re-call the same tool with the same "
+            "arguments — the answer will be identical. Reuse. You may call "
+            "tools for genuinely NEW questions not yet answered."
+        )
+        parts.append("")
+        parts.append(prior_investigation)
     return "\n".join(parts)

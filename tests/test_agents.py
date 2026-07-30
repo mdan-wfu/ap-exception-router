@@ -15,7 +15,7 @@ import pytest
 from src.graph_state import GraphState
 from src.nodes import adjudicate as adj_mod
 from src.nodes import scribe as scribe_mod
-from src.nodes._llm_turn import set_provider
+from src.llm.agent_loop import set_provider
 from src.nodes.route_outcome import route_outcome
 from src.schema import (
     Decision, Finding, Invoice, LineItem, ModelCall, Money, Outcome, Severity,
@@ -72,7 +72,7 @@ class _FakeProvider:
 @pytest.fixture
 def restore_provider():
     """Reset the module-level _provider after each test."""
-    import src.nodes._llm_turn as m
+    import src.llm.agent_loop as m
     original = m._provider
     yield
     m._provider = original
@@ -235,3 +235,124 @@ def test_route_outcome_failed_when_no_decision():
     result = route_outcome({})
     assert result["terminal_status"] == Outcome.FAILED
     assert result["failure_reason"] is not None
+
+
+# ---------------------------------------------------------------------------
+# Cross-node investigation caching + prior-investigation summary
+# ---------------------------------------------------------------------------
+
+def test_tool_cache_key_stable_for_same_args():
+    from src.llm.agent_loop import cache_key
+    a = cache_key("get_vendor_record", {"name": "FastShip Ltd."})
+    b = cache_key("get_vendor_record", {"name": "FastShip Ltd."})
+    assert a == b
+
+
+def test_tool_cache_key_differs_on_args():
+    from src.llm.agent_loop import cache_key
+    a = cache_key("get_vendor_record", {"name": "FastShip Ltd."})
+    b = cache_key("get_vendor_record", {"name": "QuickShip"})
+    assert a != b
+
+
+def test_tool_cache_key_argument_order_invariant():
+    """Sorted-args JSON means dict order doesn't affect the key."""
+    from src.llm.agent_loop import cache_key
+    a = cache_key("f", {"a": 1, "b": 2})
+    b = cache_key("f", {"b": 2, "a": 1})
+    assert a == b
+
+
+def test_format_tool_history_deduplicates_repeats():
+    """Same (name, args) shown once even if called multiple times."""
+    from src.llm.agent_loop import format_tool_history
+    from src.schema import ToolCall
+
+    tc = ToolCall(
+        name="get_vendor_record",
+        arguments={"name": "FastShip Ltd."},
+        result={"status": "inactive"},
+        latency_ms=1.0,
+        timestamp=datetime(2026, 7, 30, tzinfo=timezone.utc),
+    )
+    out = format_tool_history([tc, tc, tc])
+    # Three input calls, one line in the deduplicated history
+    assert out.count("get_vendor_record") == 1
+
+
+def test_format_tool_history_empty_returns_empty_string():
+    from src.llm.agent_loop import format_tool_history
+    assert format_tool_history([]) == ""
+
+
+def test_agent_loop_serves_cache_hit_at_zero_latency(restore_provider):
+    """When a tool call has already been executed this run, the cached result
+    is served with latency_ms=0 — the audit marker for cache hits."""
+    from src.llm.agent_loop import run_agent_loop
+    from unittest.mock import MagicMock
+
+    call_count = 0
+    def make_response():
+        nonlocal call_count
+        call_count += 1
+        r = MagicMock()
+        r.model_call = _fake_model_call()
+        r.cache_hit = False
+        # First and second calls: request the same tool. Third call: no tools.
+        if call_count < 3:
+            r.content = ""
+            r.tool_calls = [{
+                "id": f"call_{call_count}",
+                "name": "get_item_reference",
+                "arguments": {"item": "WidgetA"},
+            }]
+            r.parsed = None
+        else:
+            r.content = ""
+            r.tool_calls = []
+            r.parsed = adj_mod.AdjudicatorOutput(
+                outcome="APPROVE", rationale="ok", confidence=1.0,
+            )
+        return r
+
+    class _Repeat:
+        def chat(self, messages, response_schema=None, tools=None, prompt_name=None):
+            return make_response()
+
+    set_provider(_Repeat())
+
+    result = run_agent_loop(
+        "test prompt", adj_mod.AdjudicatorOutput, prompt_name="test",
+    )
+    # Two tool_calls recorded — but the second is a cache hit (latency 0)
+    assert len(result.tool_calls) == 2
+    latencies = [tc.latency_ms for tc in result.tool_calls]
+    assert 0.0 in latencies, f"expected a cache hit at latency 0.0; got {latencies}"
+
+
+def test_agent_loop_receives_and_returns_cache(restore_provider):
+    """A caller can seed the cache; the returned cache contains seeded entries."""
+    from src.llm.agent_loop import run_agent_loop, cache_key
+
+    class _NoTools:
+        def chat(self, messages, response_schema=None, tools=None, prompt_name=None):
+            r = MagicMock()
+            r.model_call = _fake_model_call()
+            r.content = ""
+            r.tool_calls = []
+            r.cache_hit = False
+            r.parsed = adj_mod.AdjudicatorOutput(
+                outcome="APPROVE", rationale="ok", confidence=1.0,
+            ) if response_schema is adj_mod.AdjudicatorOutput else None
+            return r
+
+    set_provider(_NoTools())
+
+    seed_key = cache_key("get_item_reference", {"item": "WidgetA"})
+    seed_cache = {seed_key: {"found": True, "canonical_name": "WidgetA"}}
+
+    result = run_agent_loop(
+        "test", adj_mod.AdjudicatorOutput, prompt_name="t",
+        tool_cache=seed_cache,
+    )
+    assert seed_key in result.tool_cache

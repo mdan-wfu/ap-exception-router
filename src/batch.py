@@ -58,6 +58,10 @@ def _run_with_seed(
         "source_path": source_path,
         "findings": list(seeded_findings),
         "nodes_fired": [],
+        "model_calls": [],
+        "tool_calls": [],
+        "critic_challenges": [],
         "critic_rounds": 0,
+        "tool_result_cache": {},
     }
     return graph.invoke(initial, config=config)

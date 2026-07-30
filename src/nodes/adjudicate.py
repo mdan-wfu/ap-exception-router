@@ -15,7 +15,11 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 from src.graph_state import GraphState
-from src.nodes._llm_turn import MAX_TOOL_TURNS, run_llm_with_tools
+from src.llm.agent_loop import (
+    MAX_INVESTIGATION_TURNS,
+    format_tool_history,
+    run_agent_loop,
+)
 from src.schema import Decision, Invoice, Outcome
 from src.validators import has_critical
 
@@ -41,24 +45,31 @@ def adjudicate(state: GraphState) -> dict:
     invoice: Invoice = state["invoice"]
     findings = state.get("findings", [])
     critic_challenges = state.get("critic_challenges", [])
+    prior_investigation = format_tool_history(state.get("tool_calls", []))
+    tool_cache_in = state.get("tool_result_cache", {})
 
-    context = _build_context(invoice, findings, critic_challenges)
+    context = _build_context(
+        invoice, findings, critic_challenges, prior_investigation,
+    )
     prompt = _load_prompt().replace("<<CONTEXT>>", context)
 
     is_revision = len(critic_challenges) > 0
     prompt_name = "adjudicator_revised" if is_revision else "adjudicator"
 
-    turn_result = run_llm_with_tools(
+    agent_result = run_agent_loop(
         prompt, AdjudicatorOutput, prompt_name=prompt_name,
+        tool_cache=tool_cache_in,
     )
 
-    model_output = turn_result.parsed
+    model_output = agent_result.parsed
     if model_output is None:
         decision = Decision(
             outcome=Outcome.ESCALATE,
             rationale=(
-                f"Tool loop cap ({MAX_TOOL_TURNS}) reached without a structured "
-                f"decision. Escalating to human review."
+                f"Investigation cap ({MAX_INVESTIGATION_TURNS} tool turns) "
+                f"reached without a structured decision after "
+                f"{agent_result.investigation_turns} turn(s) and "
+                f"{len(agent_result.tool_calls)} tool call(s). Escalating."
             ),
             confidence=0.3,
         )
@@ -101,8 +112,9 @@ def adjudicate(state: GraphState) -> dict:
 
     return {
         "decision": decision,
-        "model_calls": turn_result.model_calls,
-        "tool_calls": turn_result.tool_calls,
+        "model_calls": agent_result.model_calls,
+        "tool_calls": agent_result.tool_calls,
+        "tool_result_cache": agent_result.tool_cache,
         "revision_occurred": state.get("revision_occurred", False) or revised,
         "guardrail_override_fired": override_fired,
         "guardrail_override_reason": override_reason,
@@ -110,7 +122,11 @@ def adjudicate(state: GraphState) -> dict:
     }
 
 
-def _build_context(invoice: Invoice, findings, critic_challenges: list[str]) -> str:
+def _build_context(
+    invoice: Invoice, findings,
+    critic_challenges: list[str],
+    prior_investigation: str,
+) -> str:
     lines = []
     lines.append("### Invoice")
     inv_dict = _invoice_summary(invoice)
@@ -126,6 +142,17 @@ def _build_context(invoice: Invoice, findings, critic_challenges: list[str]) -> 
                 + (f"  (evidence: {f.evidence})" if f.evidence else "")
                 + (f"  (at {f.field_path})" if f.field_path else "")
             )
+    if prior_investigation:
+        lines.append("")
+        lines.append("### Prior investigation (do NOT re-run these tool calls)")
+        lines.append(
+            "The results below are ALREADY IN CONTEXT. Re-calling the same "
+            "tool with the same arguments will return the identical result — "
+            "reuse the facts here. You may still call tools for NEW questions "
+            "not answered below."
+        )
+        lines.append("")
+        lines.append(prior_investigation)
     if critic_challenges:
         lines.append("")
         lines.append("### Prior critic challenges")

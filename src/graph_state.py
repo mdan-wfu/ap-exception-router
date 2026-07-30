@@ -14,9 +14,20 @@ Two design requirements documented in Phase 5a:
 from __future__ import annotations
 
 import operator
-from typing import Annotated, TypedDict
+from typing import Annotated, Any, TypedDict
 
 from src.schema import Decision, Finding, Invoice, ModelCall, Outcome, ToolCall
+
+
+def _merge_tool_cache(a: dict[str, Any], b: dict[str, Any]) -> dict[str, Any]:
+    """Union of two tool-result caches. Later values win on conflict — they
+    should be identical anyway since tools are pure functions of their args
+    and the invariant reference DB within a single run."""
+    if not a:
+        return dict(b) if b else {}
+    if not b:
+        return dict(a)
+    return {**a, **b}
 
 
 class GraphState(TypedDict, total=False):
@@ -51,6 +62,14 @@ class GraphState(TypedDict, total=False):
     # LLM + tool call traces accumulate across every node that uses them
     model_calls: Annotated[list[ModelCall], operator.add]
     tool_calls: Annotated[list[ToolCall], operator.add]
+
+    # Tool-result cache, shared across every agent node within one run.
+    # Key: `${tool_name}::${sorted-args-json}`. Value: the tool result dict.
+    # Prevents re-executing an identical lookup across the initial adjudicator,
+    # critic rounds, and revised adjudicator passes. Beyond cost, an uncached
+    # tool could theoretically return different answers to the same question
+    # inside one decision — the cache eliminates that class of incoherence.
+    tool_result_cache: Annotated[dict[str, Any], _merge_tool_cache]
 
     # Terminal
     terminal_status: Outcome | None
