@@ -119,14 +119,14 @@ Each is pure: `(Invoice, reference) -> list[Finding]`.
 **Exit:** every invoice in the ground-truth table produces its expected findings. This is the first real checkpoint.
 
 ## Phase 5 — Graph and judgment agents
-- [ ] `src/graph.py` — `StateGraph` assembled so it reads like the flow diagram
-- [ ] `src/tools/` — five read-only lookup tools per `CLAUDE.md` §2.1a, registered as LangGraph tools with JSON schemas
-- [ ] `prompts/adjudicator.md` — receives invoice + findings + policy context, may call tools to investigate, returns decision + rationale. Computes nothing.
-- [ ] Tool calls captured in the run trace (name, arguments, result, latency)
-- [ ] `prompts/critic.md` — argues the opposite side
-- [ ] Conditional critic edge: fires only when amount > threshold **or** any finding ≥ HIGH. Max 2 rounds.
-- [ ] Hard guardrail in code: CRITICAL finding cannot resolve to `APPROVE`
-- [ ] `prompts/scribe.md` — plain-English exception note for the human queue
+- [x] `src/graph.py` — `StateGraph` assembled so it reads like the flow diagram (Phase 5a)
+- [ ] `src/tools/` — five read-only lookup tools per `CLAUDE.md` §2.1a, registered as LangGraph tools with JSON schemas (Phase 5b)
+- [ ] `prompts/adjudicator.md` — receives invoice + findings + policy context, may call tools to investigate, returns decision + rationale. Computes nothing. (Phase 5c)
+- [ ] Tool calls captured in the run trace (name, arguments, result, latency) (Phase 5c)
+- [ ] `prompts/critic.md` — argues the opposite side (Phase 5c)
+- [x] Conditional critic edge: fires only when amount > threshold **or** any finding ≥ HIGH. Max 2 rounds. (Phase 5a)
+- [x] Hard guardrail in code: CRITICAL finding cannot resolve to `APPROVE` (Phase 4 predicate wired via `policy_gate` in 5a)
+- [ ] `prompts/scribe.md` — plain-English exception note for the human queue (Phase 5c)
 
 **Exit:** all 16 invoices produce a decision with rationale.
 
@@ -213,3 +213,5 @@ Claude Code appends one line per session: date, phases touched, anything that su
 2026-07-29 — Phase 3 complete. All 20 corpus files produce Invoices. Deterministic adapters (json/csv/xml) + LLM adapters (text/pdf) + triage router + repair loop. prompts/extractor.md now instructs declared repairs — INV-1012 produces 2 explicit corrections for the OCR substitutions (previously silent). No LLM fallbacks fired on this corpus (all deterministic parsers cleared MIN_FIELD_COVERAGE=0.75). Both previously-skipped hash tests pass end-to-end. Surprise: `.env` had LLM_MODE=live from Phase 2 dev, making Phase 3 test runs 150+ seconds per invocation until switched to auto. 110 pass, 0 skip.
 
 2026-07-29 — Phase 4 complete. All 8 validators + registry + guardrail predicate. Findings match CLAUDE.md §6 with one discovery: INV-1007 has an undocumented $110 grand-total arithmetic error (14750 subtotal + 885 tax = 15635, stated total 15525). Every invoice produces expected findings; INV-1006 remains clean (fuzzy VN-002 does not false-positive on Acme Industrial); INV-1010's $150 shipping correctly does NOT trip AR-004. 145 pass.
+
+2026-07-30 — Phase 5a complete. Graph skeleton (StateGraph with SqliteSaver checkpointer), deterministic nodes (triage, validate, policy_gate, route_outcome placeholder), stubs (adjudicate, critique) with conditional edge on CRITIC_TRIGGER, batch pre-pass for duplicates. Zero API calls this phase. Collapsed triage+extract into a single triage node. 157 pass.

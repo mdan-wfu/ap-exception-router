@@ -342,3 +342,32 @@ All other 17 files reconcile exactly on both the line-sum-vs-stated-subtotal ste
 2026-07-29
 
 ---
+
+**Decision:** LangGraph state uses `Annotated[list[Finding], operator.add]` and `Annotated[list[str], operator.add]` reducers on `findings` and `nodes_fired`. Every other field replaces on write.
+**Alternatives considered:** Manage findings imperatively (each node reads existing findings and returns the merged list); use `add_messages` from langgraph.
+**Why:** Multiple nodes contribute findings (batch pre-pass seeds duplicates; `validate` adds per-invoice checks; Phase 5c agents may add extraction-repair or critic notes). Imperative merge is a footgun — the first node that forgets to include the existing list clobbers everything upstream. The reducer makes accumulation the default and unavoidable.
+2026-07-30
+
+---
+
+**Decision:** Collapsed the planned `triage` and `extract` nodes into a single `triage` node. `router.extract()` already returns a finished `Invoice` inside its `ExtractionResult`, and EX- findings are emitted by the extraction validator inside `validate`. A separate `extract` node would be empty apart from a pass-through of state.
+**Alternatives considered:** Keep both nodes for symmetry with the phase-diagram sketch.
+**Why:** CLAUDE.md §7 says `src/graph.py` "should read like the flow diagram." An empty pass-through node makes the diagram lie: readers expect substantive work at each labelled step. Collapsing keeps the graph honest.
+2026-07-30
+
+---
+
+**Decision:** Duplicates run as a pre-pass over the whole batch in `src/batch.py`; per-invoice graph runs are seeded with their own duplicate findings via the `findings` reducer.
+**Alternatives considered:** Duplicate check inside the graph via a batch-aware node; post-pass that re-processes results.
+**Why:** `find_duplicates(list[Invoice])` needs the whole set to group by normalized invoice_number. A per-invoice graph pass has no view of the set. Making duplicate detection a pre-pass keeps the graph strictly per-invoice while surfacing the finding through the same reducer that per-invoice validators use.
+**Known limitation:** `--invoice_path` cannot detect duplicates without corpus context. `main.py` prints `(single-invoice mode: duplicate detection skipped — batch required)` after the result; the Phase 6 audit view will carry the same label. If a user needs duplicate detection for a single new invoice, they run `--batch` — the pre-pass ingests every file including the new one.
+2026-07-30
+
+---
+
+**Decision:** Checkpointer is `langgraph.checkpoint.sqlite.SqliteSaver` at `runs/checkpoints.sqlite`, installed at graph compile time. Tests use `build_graph(checkpointer_path=None)` (no persistence) so test invocations do not accumulate state between runs.
+**Alternatives considered:** `InMemorySaver` (loses state between processes; Phase 6's human gate needs persistence); Postgres saver (overkill).
+**Why:** Phase 6 wires an `interrupt()` human gate; that requires a checkpointer that survives process restarts. SqliteSaver is the smallest viable persistence layer and matches CLAUDE.md §3's pin. Installing it in 5a means Phase 6 does not retrofit the graph.
+2026-07-30
+
+---
