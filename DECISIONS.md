@@ -566,3 +566,16 @@ Also added a running cost printout to `scripts/adjudicate_corpus.py` after each 
 2026-07-30
 
 ---
+
+**Decision (known issue, not fixed here):** INV-1004 resolved to REJECT in the 2026-07-30 corpus run, differing from earlier runs' ESCALATE. Root cause is an infrastructure gap, not a change in judgment. `get_prior_invoice(INV-1004)` returned `found=False` because the audit store is empty — Phase 6 (audit persistence, human gate settlement) has not yet been built, so the tool has no records to serve. There is nothing on disk saying "the other INV-1004 file exists or was already touched."
+
+The Adjudicator's rationale then treated that infrastructure absence as a business fact: "no prior submission exists, so DP-002 is a live double-pay risk requiring hard rejection." That reasoning would be correct in a production system with a populated audit store; here it is not, because the sibling file `invoice_1004_revised.json` is a real second submission that already exists on disk and that the DP-002 finding (from `find_duplicates()` in the batch pre-pass) explicitly flags.
+
+The DP-002 finding says the two files exist. `get_prior_invoice` says no prior payment record exists. Both are true; the Adjudicator conflated them and concluded REJECT. Expected outcome once the audit store carries real prior-invoice context — either seeded from the batch pre-pass or filled by Phase 6's settlement records — is ESCALATE, matching the "human confirms which of the two INV-1004 files is authoritative" resolution path that all prior runs produced.
+
+**Fix location** (out of scope for this build): Phase 6 wires the audit store; either `get_prior_invoice` learns to read the current batch's sibling files, or `find_duplicates`' emitted DP-002 evidence is elevated in the Adjudicator prompt so the tool's `found=False` cannot dominate. Both are Phase 6 work.
+
+**Revisit after Phase 6.** Do not tune the prompt against this now — the tool is lying by omission and the prompt is doing the best it can with the answer it received.
+2026-07-30
+
+---
