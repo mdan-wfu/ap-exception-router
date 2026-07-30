@@ -20,6 +20,33 @@ from src.validators.reference import Reference, VendorRecord
 FUZZY_THRESHOLD = 0.70
 
 
+def score_candidates(
+    name: str,
+    reference: "Reference",
+    *,
+    min_score: float = FUZZY_THRESHOLD,
+    top_n: int | None = None,
+) -> list[tuple[float, "VendorRecord"]]:
+    """Shared fuzzy scoring used by the validator and by src/tools/vendor_tools.
+
+    Returns (score, record) pairs above `min_score`, sorted descending. The
+    tool uses a lower threshold to give the Adjudicator investigative
+    context; the validator uses the strict threshold to avoid false positives.
+    """
+    target = name.strip().lower() if name else ""
+    if not target:
+        return []
+    scored: list[tuple[float, VendorRecord]] = []
+    for record in reference.vendors.values():
+        ratio = SequenceMatcher(None, target, record.name.lower()).ratio()
+        if ratio >= min_score:
+            scored.append((ratio, record))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    if top_n is not None:
+        scored = scored[:top_n]
+    return scored
+
+
 def check(invoice: Invoice, reference: Reference) -> list[Finding]:
     findings: list[Finding] = []
 
@@ -121,15 +148,11 @@ def _fuzzy_candidate(
                     record,
                 )
 
-    # 2. Fuzzy match on vendor_name
-    target = invoice.vendor_name.lower()
-    best: tuple[float, VendorRecord] | None = None
-    for record in reference.vendors.values():
-        ratio = SequenceMatcher(None, target, record.name.lower()).ratio()
-        if ratio >= FUZZY_THRESHOLD and (best is None or ratio > best[0]):
-            best = (ratio, record)
-    if best is not None:
-        return (f"SequenceMatcher ratio {best[0]:.2f}", best[1])
+    # 2. Fuzzy match on vendor_name (strict threshold)
+    scored = score_candidates(invoice.vendor_name, reference)
+    if scored:
+        best_score, best_record = scored[0]
+        return (f"SequenceMatcher ratio {best_score:.2f}", best_record)
     return None
 
 
