@@ -34,5 +34,9 @@ TERMS_TOLERANCE_DAYS: int = 2
 FX_RATES: dict[str, float] = {"EUR": 1.14}
 
 # Critic / repair loop limits
-MAX_CRITIC_ROUNDS: int = 2
+# Single-critic-round policy: a second round would re-issue the same challenge
+# against the same invoice+findings+tools with the only new input being the
+# revised rationale. That is a re-roll, not a new challenge. See DECISIONS.md
+# for the reasoning and the future-work note on giving round 2 a different job.
+MAX_CRITIC_ROUNDS: int = 1
 MAX_REPAIR_ATTEMPTS: int = 2

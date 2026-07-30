@@ -1,5 +1,5 @@
 {
-  "content": "{\n  \"invoice_number_raw\": \"INV-1003\",\n  \"vendor_raw\": \"Fraudster LLC\",\n  \"vendor_claims\": [],\n  \"vendor_address\": null,\n  \"vendor_email\": null,\n  \"date_raw\": \"2026-01-20\",\n  \"invoice_date\": \"2026-01-20\",\n  \"due_date_raw\": \"yesterday\",\n  \"due_date\": null,\n  \"currency\": \"USD\",\n  \"line_items\": [\n    {\n      \"raw_item_name\": \"FakeItem\",\n      \"quantity\": 100,\n      \"unit_price_amount\": 1000.0,\n      \"line_amount\": null,\n      \"note\": null,\n      \"confidence\": 0.95\n    }\n  ],\n  \"additional_charges\": [],\n  \"stated_subtotal\": null,\n  \"stated_tax\": null,\n  \"stated_total\": 100000.0,\n  \"payment_terms\": \"Immediate\",\n  \"references\": [],\n  \"notes\": \"URGENT - Pay immediately to avoid penalties!!! Wire transfer preferred.\",\n  \"corrections\": [],\n  \"extraction_confidence\": 0.95\n}",
+  "content": "{\"invoice_number_raw\":\"INV-1003\",\"vendor_raw\":\"Fraudster LLC\",\"vendor_claims\":[],\"vendor_address\":null,\"vendor_email\":null,\"date_raw\":\"2026-01-20\",\"invoice_date\":\"2026-01-20\",\"due_date_raw\":\"yesterday\",\"due_date\":null,\"currency\":\"USD\",\"line_items\":[{\"raw_item_name\":\"FakeItem\",\"quantity\":100,\"unit_price_amount\":1000.0,\"line_amount\":null,\"note\":null,\"confidence\":0.95}],\"additional_charges\":[],\"stated_subtotal\":null,\"stated_tax\":null,\"stated_total\":100000.0,\"payment_terms\":\"Immediate\",\"references\":[],\"notes\":\"URGENT - Pay immediately to avoid penalties!!! Wire transfer preferred.\",\"corrections\":[],\"extraction_confidence\":0.95}",
   "fingerprint": {
     "messages": [
       {
@@ -324,16 +324,16 @@
     "tools": null
   },
   "model_call": {
-    "cached_prompt_tokens": 128,
-    "completion_tokens": 272,
-    "latency_ms": 7923.107500188053,
+    "cached_prompt_tokens": 2304,
+    "completion_tokens": 200,
+    "latency_ms": 6837.313458323479,
     "prompt_name": "extractor",
     "prompt_tokens": 2330,
-    "reasoning_tokens": 418,
+    "reasoning_tokens": 388,
     "requested_model": "grok-4.5",
     "resolved_model": "grok-4.5",
     "system_fingerprint": "fp_a39489019fa99b6e",
-    "timestamp": "2026-07-30T03:09:22.881845Z"
+    "timestamp": "2026-07-30T22:17:51.437911Z"
   },
   "tool_calls": []
 }

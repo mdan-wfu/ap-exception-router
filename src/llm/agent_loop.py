@@ -45,8 +45,16 @@ MAX_INVESTIGATION_TURNS = 3
 # model looping through tool calls or agent nodes), not intended operating
 # limits. If a legitimate run trips one of these, the caps are what needs
 # raising, not the breaker removed. See DECISIONS.md.
+#
+# Model-call cap accommodates the worst-case legitimate agent path under the
+# single-critic policy: 3 (adjudicate) + 3 (critic) + 3 (revised adjudicate)
+# = 9 agent-loop calls, with one slot of headroom. Scribe is excluded from
+# the count (see scribe.py). Raised from 8 to 10 after INV-1004 tripped —
+# its revised adjudicator used 3 calls where the earlier estimate assumed 2,
+# showing the cap cannot sit exactly at the theoretical ceiling without
+# tripping on ordinary variance.
 MAX_TOOL_CALLS_PER_INVOICE = 12
-MAX_MODEL_CALLS_PER_INVOICE = 8
+MAX_MODEL_CALLS_PER_INVOICE = 10
 
 
 class CircuitBreakerTripped(Exception):

@@ -1,0 +1,66 @@
+{
+  "content": "{\n  \"outcome\": \"REJECT\",\n  \"rationale\": \"DP-002 is CRITICAL: INV-1004 exists as two files with differing semantic hashes (invoice_1004.json vs invoice_1004_revised.json), which is a double-payment fork. get_prior_invoice confirms INV-1004 has never been paid, so there is no clawback issue\u2014only two unpaid competing versions. Per DP-002 policy, payment on any version is refused until a single authoritative file remains; this submission (and its sibling) is rejected until the duplicate is removed. Vendor Precision Parts Ltd. is an active Net-30 counterparty and the line items/prices are clean, but that does not license paying one fork while the other still exists.\",\n  \"confidence\": 0.92,\n  \"finding_codes_referenced\": [\"DP-002\"]\n}",
+  "fingerprint": {
+    "messages": [
+      {
+        "content": "# Adjudicator\n\nYou are the exception adjudicator for an AP (accounts payable) system. Your job is to look at one invoice, the deterministic findings raised against it, and \u2014 if you need more evidence \u2014 the results of tool calls, and decide what to do with it.\n\n## What arrives as SETTLED FACT\n\nThe following are already computed and audited. Trust them; do NOT recompute:\n\n- Every monetary value on the invoice (line totals, subtotal, tax, grand total)\n- Every arithmetic check (line totals vs qty \u00d7 price; subtotal vs sum of lines; grand total vs subtotal + tax + additional_charges; sign of the delta)\n- Every inventory check (unknown item, zero-stock inactive item, aggregate quantity exceeds standing stock)\n- Every price comparison (already done in USD, post-FX)\n- The $10,000 approval threshold and the 5% near-threshold band\n- The vendor's presence or absence in the master\n- Whether the invoice number matches any prior submission (duplicate class DP-*)\n- Every declared correction the extractor made (EX-001)\n\nIf a finding says \"the stated total does not equal subtotal + tax + additional_charges by $110\", that is arithmetic that has been done for you. Do NOT re-check the math. Trust the finding.\n\n## The three outcomes\n\n- **APPROVE** \u2014 no finding is disqualifying, given what you can see and what tools return. Pay it.\n- **REJECT** \u2014 the invoice cannot be paid under any reasonable reading. A negative total, a fabricated vendor with fraud signals and no plausible resolution, or two identical hashes charged as separate invoices.\n- **ESCALATE** \u2014 resolution requires information the system does not have, or a judgment a human should own.\n\n**Escalate liberally.** Wrongly rejecting a legitimate invoice costs a vendor relationship. Wrongly approving a fraudulent one costs money. Escalating costs an AP clerk four minutes. When genuinely uncertain, escalate and state what would resolve it (e.g. \"confirm with vendor whether R1 supersedes the original; if so, void the original PO\").\n\n## Severity interpretation\n\n- **CRITICAL** \u2014 the invoice cannot auto-approve (code enforces this).\n- **HIGH** \u2014 a substantive defect; usually escalate unless a tool result cleanly resolves it.\n- **MEDIUM** \u2014 an anomaly worth surfacing; may still approve if the anomaly has an obvious innocent reading.\n- **LOW** \u2014 noted; rarely decision-relevant on its own.\n- **INFO** \u2014 informational only. Do NOT escalate solely on INFO. An invoice whose only findings are INFO should APPROVE. INFO findings are the audit trail of the system doing its job (extractor repairs, successful deduplication) \u2014 they are not defects.\n\n## Tool use \u2014 required patterns\n\nYou have five read-only lookup tools. Certain finding shapes trigger a REQUIRED tool call. Do the tool call before writing your rationale; then cite the tool result in the rationale.\n\nThe required patterns are:\n\n1. **Any `vendor_claims` entry asserting a former name, DBA, or rename** (e.g. `(formerly FastShip Ltd.)`):\n   - REQUIRED: call `get_vendor_record` with the claimed name (the text inside the parens, stripped of the word \"formerly\").\n   - REQUIRED: if the claimed name resolves to a master entry (whether active or inactive), also call `get_vendor_invoice_history` on that master name to see when the relationship was last active.\n   - Even if a finding already names the candidate, do the tool call. It verifies current master status at decision time and puts the audit trail in the run record.\n\n2. **Any `DP-*` finding**:\n   - REQUIRED: call `get_prior_invoice` with the normalized invoice number. `DP-002` (differing content, same number) is only actionable when you know whether the prior was paid. `DP-001` benefits from confirming which file was retained.\n\n3. **Any `IN-001` (unknown item)**:\n   - Optional but useful: call `get_item_reference` with the raw item name to confirm the tool agrees the item is unknown (a canonicalization gap would be a bug, not a finding).\n\n4. **Any finding whose documented meaning you are uncertain of**:\n   - Call `get_policy(finding_code)` for the documented trigger, detection method, and rationale.\n\n`get_vendor_record` returns fuzzy candidates with a `match_threshold` (currently `0.70`) and a per-candidate `below_threshold` flag. Candidates flagged `below_threshold=True` are **neighborhood noise, not name matches** \u2014 they are corroborating context only, and 0.35 vs 0.34 does not imply meaningful ordering. Fuzzy similarity alone never resolves a vendor identity question; the exact substring match against `vendor_claims` (score `1.0`) is what carries the finding.\n\n## What you MUST NOT do\n\n- Recompute any arithmetic. If a stated total is wrong by $50, a validator has already emitted `AR-004` with the signed delta.\n- Re-check stock, aggregate quantities, or price ratios.\n- Apply the $10,000 threshold. `PO-001` and `PO-002` are the answer to that question.\n- Doubt or dismiss a finding because you \"don't think it's a big deal\". The finding is a fact. Your job is to weigh it, not to argue with it.\n- Downgrade a `CRITICAL` finding. Code enforces that no invoice with a CRITICAL finding can auto-approve \u2014 you cannot bypass this even if you disagree.\n\n## Your output\n\nReturn JSON matching this shape:\n\n```\n{\n  \"outcome\": \"APPROVE\" | \"REJECT\" | \"ESCALATE\",\n  \"rationale\": \"<one paragraph, legible to an AP clerk, referencing specific finding codes>\",\n  \"confidence\": <float in [0.0, 1.0]>,\n  \"finding_codes_referenced\": [\"AR-004\", \"DP-002\", ...]\n}\n```\n\nThe rationale must:\n- Name the specific findings that drove the outcome, by code\n- Reference tool results if you used them\n- Be readable by an AP clerk who cares about the invoice, not the pipeline. Prefer plain English over jargon.\n- Say what would resolve an escalation\n\n## The invoice, findings, and any prior critic challenge\n\n### Invoice\n{\n  \"invoice_number\": \"INV-1004\",\n  \"invoice_number_raw\": \"INV-1004\",\n  \"vendor_name\": \"Precision Parts Ltd.\",\n  \"vendor_raw\": \"Precision Parts Ltd.\",\n  \"vendor_claims\": [],\n  \"vendor_address\": \"742 Evergreen Terrace, Springfield, IL 62704\",\n  \"vendor_email\": null,\n  \"invoice_date\": \"2026-01-22\",\n  \"date_raw\": \"2026-01-22\",\n  \"due_date\": \"2026-02-22\",\n  \"due_date_raw\": \"2026-02-22\",\n  \"payment_terms\": \"Net 30\",\n  \"references\": [],\n  \"notes\": null,\n  \"line_items\": [\n    {\n      \"raw_item_name\": \"WidgetA\",\n      \"canonical_item\": \"WidgetA\",\n      \"quantity\": 3,\n      \"unit_price_usd\": \"250.0\",\n      \"unit_price_native\": \"250.0 USD\",\n      \"line_amount_usd\": null,\n      \"note\": null\n    },\n    {\n      \"raw_item_name\": \"WidgetB\",\n      \"canonical_item\": \"WidgetB\",\n      \"quantity\": 2,\n      \"unit_price_usd\": \"500.0\",\n      \"unit_price_native\": \"500.0 USD\",\n      \"line_amount_usd\": null,\n      \"note\": null\n    }\n  ],\n  \"additional_charges\": [],\n  \"stated_subtotal_usd\": \"1750.0\",\n  \"stated_tax_usd\": \"140.0\",\n  \"stated_total_usd\": \"1890.0\",\n  \"currency\": \"USD\",\n  \"source_file\": \"/Users/maximiliandaneker/dev/ap-exception-router/data/invoices/invoice_1004.json\",\n  \"source_format\": \"json\",\n  \"corrections\": []\n}\n\n### Findings\n- DP-002 [CRITICAL] INV-1004: 2 files with DIFFERING semantic_hash \u2014 double-payment risk  (evidence: group_files=['/Users/maximiliandaneker/dev/ap-exception-router/data/invoices/invoice_1004.json', '/Users/maximiliandaneker/dev/ap-exception-router/data/invoices/invoice_1004_revised.json'], hashes=['8ded1957755668f6984bfa3881fcc626841b12f791a8268e62590e98f4198a25', 'f488def6bf7fb40ca1778f5e865553d1bb61e599b5fa028d5f55e7e6a76108cf'])  (at semantic_hash)\n\n### Prior investigation (do NOT re-run these tool calls)\nThe results below are ALREADY IN CONTEXT. Re-calling the same tool with the same arguments will return the identical result \u2014 reuse the facts here. You may still call tools for NEW questions not answered below.\n\n- get_prior_invoice({\"invoice_number\": \"INV-1004\"}) \u2192 {\"found\": false, \"invoice_number\": \"INV-1004\", \"prior_outcome\": null, \"semantic_hash\": null, \"source_file\": null, \"stated_total_usd\": null}\n- get_policy({\"finding_code\": \"DP-002\"}) \u2192 {\"code\": \"DP-002\", \"corpus_examples\": [\"INV-1004\", \"INV-1004_revised\"], \"detection\": \"Same grouping, multiple hashes\", \"found\": true, \"rationale\": \"Same invoice number, different content \\u2014 double-pay risk.\", \"trigger\": \"Multiple files with the same normalized invoice number and DIFFERING `semantic_hash`\"}\n- get_vendor_record({\"name\": \"Precision Parts Ltd.\"}) \u2192 {\"exact_match\": {\"contracted_terms\": \"Net 30\", \"domain\": \"precisionparts.com\", \"name\": \"Precision Parts Ltd.\", \"relationship_since\": \"2018-01-09\", \"status\": \"active\"}, \"fuzzy_candidates\": [{\"below_threshold\": false, \"name\": \"Precision Parts Ltd.\", \"relationship_since\": \"2018-01-09\", \"score\": 1.0, \"status\": \"active\"}, {\"below_threshold\": true, \"name\": \"FastShip Ltd.\", \"relationship_since\": \"2016-10\u2026\n- get_vendor_invoice_history({\"name\": \"Precision Parts Ltd.\"}) \u2192 {\"first_seen\": null, \"invoice_count\": 0, \"last_seen\": null, \"prior_outcomes\": {}, \"total_value_usd\": \"0\", \"vendor_name\": \"Precision Parts Ltd.\"}\n- get_item_reference({\"item\": \"WidgetA\"}) \u2192 {\"active\": true, \"canonical_name\": \"WidgetA\", \"category\": \"component\", \"found\": true, \"query\": \"WidgetA\", \"reference_unit_price\": \"250\", \"stock\": 15}\n- get_item_reference({\"item\": \"WidgetB\"}) \u2192 {\"active\": true, \"canonical_name\": \"WidgetB\", \"category\": \"component\", \"found\": true, \"query\": \"WidgetB\", \"reference_unit_price\": \"500\", \"stock\": 10}\n\n### Prior critic challenges\nRound 1: DP-002 does not require a human to pick the winner: get_prior_invoice already confirmed INV-1004 has never been paid, so there is no reversal or clawback risk\u2014only a fork of two unpaid files. Policy for DP-002 frames differing semantic hashes as double-pay risk, which is resolved by refusing payment on any version until a single authoritative file remains, not by adjudicating which of invoice_1004.json vs invoice_1004_revised.json is \u201cright.\u201d This packet\u2019s totals and catalog prices (WidgetA 3\u00d7250, WidgetB 2\u00d7500) are clean and the vendor is an active Net-30 counterparty, but those facts do not license paying one fork while the other still exists; the decidable automated outcome is REJECT this submission (and any sibling) until the duplicate is removed.\n",
+        "role": "user"
+      },
+      {
+        "content": "Based on your investigation above, produce your final answer as JSON matching the response schema. Do not call any tools; you have all the information you need.",
+        "role": "user"
+      }
+    ],
+    "model": "grok-4.5",
+    "response_format": {
+      "json_schema": {
+        "name": "AdjudicatorOutput",
+        "schema": {
+          "properties": {
+            "confidence": {
+              "title": "Confidence",
+              "type": "number"
+            },
+            "finding_codes_referenced": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Finding Codes Referenced",
+              "type": "array"
+            },
+            "outcome": {
+              "title": "Outcome",
+              "type": "string"
+            },
+            "rationale": {
+              "title": "Rationale",
+              "type": "string"
+            }
+          },
+          "required": [
+            "outcome",
+            "rationale",
+            "confidence"
+          ],
+          "title": "AdjudicatorOutput",
+          "type": "object"
+        }
+      },
+      "type": "json_schema"
+    },
+    "tools": null
+  },
+  "model_call": {
+    "cached_prompt_tokens": 128,
+    "completion_tokens": 180,
+    "latency_ms": 17767.06295926124,
+    "prompt_name": "adjudicator_revised_synthesize",
+    "prompt_tokens": 3075,
+    "reasoning_tokens": 936,
+    "requested_model": "grok-4.5",
+    "resolved_model": "grok-4.5",
+    "system_fingerprint": "fp_a39489019fa99b6e",
+    "timestamp": "2026-07-30T22:21:35.802277Z"
+  },
+  "tool_calls": []
+}

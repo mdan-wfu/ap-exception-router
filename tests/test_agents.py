@@ -331,7 +331,11 @@ def test_agent_loop_serves_cache_hit_at_zero_latency(restore_provider):
 
 
 def test_circuit_breaker_trips_on_model_cap(restore_provider):
-    from src.llm.agent_loop import CircuitBreakerTripped, run_agent_loop
+    from src.llm.agent_loop import (
+        MAX_MODEL_CALLS_PER_INVOICE,
+        CircuitBreakerTripped,
+        run_agent_loop,
+    )
 
     class _AnyResponse:
         def chat(self, messages, response_schema=None, tools=None, prompt_name=None):
@@ -347,14 +351,18 @@ def test_circuit_breaker_trips_on_model_cap(restore_provider):
     with pytest.raises(CircuitBreakerTripped) as exc:
         run_agent_loop(
             "test", adj_mod.AdjudicatorOutput, prompt_name="test",
-            invoice_model_calls_used=8,       # at MAX_MODEL_CALLS_PER_INVOICE
+            invoice_model_calls_used=MAX_MODEL_CALLS_PER_INVOICE,   # exactly at cap
             invoice_tool_calls_used=0,
         )
     assert "model-call cap" in str(exc.value)
 
 
 def test_circuit_breaker_trips_on_tool_cap(restore_provider):
-    from src.llm.agent_loop import CircuitBreakerTripped, run_agent_loop
+    from src.llm.agent_loop import (
+        MAX_TOOL_CALLS_PER_INVOICE,
+        CircuitBreakerTripped,
+        run_agent_loop,
+    )
 
     class _ToolThenAnswer:
         def __init__(self):
@@ -377,7 +385,7 @@ def test_circuit_breaker_trips_on_tool_cap(restore_provider):
     with pytest.raises(CircuitBreakerTripped) as exc:
         run_agent_loop(
             "test", adj_mod.AdjudicatorOutput, prompt_name="test",
-            invoice_tool_calls_used=12,       # at MAX_TOOL_CALLS_PER_INVOICE
+            invoice_tool_calls_used=MAX_TOOL_CALLS_PER_INVOICE,   # exactly at cap
             invoice_model_calls_used=0,
         )
     assert "tool-call cap" in str(exc.value)

@@ -1,5 +1,5 @@
 {
-  "content": "{\"invoice_number_raw\":\"INV-1010\",\"vendor_raw\":\"Consolidated Materials Group\",\"vendor_claims\":[],\"vendor_address\":null,\"vendor_email\":null,\"date_raw\":\"January 27, 2026\",\"invoice_date\":\"2026-01-27\",\"due_date_raw\":\"February 26, 2026\",\"due_date\":\"2026-02-26\",\"currency\":\"USD\",\"line_items\":[{\"raw_item_name\":\"WidgetA\",\"quantity\":8,\"unit_price_amount\":250.0,\"line_amount\":2000.0,\"note\":null,\"confidence\":1.0},{\"raw_item_name\":\"WidgetB\",\"quantity\":4,\"unit_price_amount\":500.0,\"line_amount\":2000.0,\"note\":null,\"confidence\":1.0},{\"raw_item_name\":\"GadgetX\",\"quantity\":2,\"unit_price_amount\":750.0,\"line_amount\":1500.0,\"note\":null,\"confidence\":1.0},{\"raw_item_name\":\"WidgetA (rush order)\",\"quantity\":4,\"unit_price_amount\":300.0,\"line_amount\":1200.0,\"note\":null,\"confidence\":1.0}],\"additional_charges\":[{\"label\":\"Shipping\",\"amount\":150.0}],\"stated_subtotal\":6700.0,\"stated_tax\":335.0,\"stated_total\":7185.0,\"payment_terms\":\"Net 30\",\"references\":[],\"notes\":\"Thank you for your business!\",\"corrections\":[],\"extraction_confidence\":0.99}",
+  "content": "{\"invoice_number_raw\": \"INV-1010\", \"vendor_raw\": \"Consolidated Materials Group\", \"vendor_claims\": [], \"vendor_address\": null, \"vendor_email\": null, \"date_raw\": \"January 27, 2026\", \"invoice_date\": \"2026-01-27\", \"due_date_raw\": \"February 26, 2026\", \"due_date\": \"2026-02-26\", \"currency\": \"USD\", \"line_items\": [{\"raw_item_name\": \"WidgetA\", \"quantity\": 8, \"unit_price_amount\": 250.0, \"line_amount\": 2000.0, \"note\": null, \"confidence\": 1.0}, {\"raw_item_name\": \"WidgetB\", \"quantity\": 4, \"unit_price_amount\": 500.0, \"line_amount\": 2000.0, \"note\": null, \"confidence\": 1.0}, {\"raw_item_name\": \"GadgetX\", \"quantity\": 2, \"unit_price_amount\": 750.0, \"line_amount\": 1500.0, \"note\": null, \"confidence\": 1.0}, {\"raw_item_name\": \"WidgetA (rush order)\", \"quantity\": 4, \"unit_price_amount\": 300.0, \"line_amount\": 1200.0, \"note\": null, \"confidence\": 1.0}], \"additional_charges\": [{\"label\": \"Shipping\", \"amount\": 150.0}], \"stated_subtotal\": 6700.0, \"stated_tax\": 335.0, \"stated_total\": 7185.0, \"payment_terms\": \"Net 30\", \"references\": [], \"notes\": \"Thank you for your business!\", \"corrections\": [], \"extraction_confidence\": 1.0}",
   "fingerprint": {
     "messages": [
       {
@@ -324,16 +324,16 @@
     "tools": null
   },
   "model_call": {
-    "cached_prompt_tokens": 128,
-    "completion_tokens": 364,
-    "latency_ms": 10526.269500143826,
+    "cached_prompt_tokens": 2432,
+    "completion_tokens": 418,
+    "latency_ms": 7608.121250290424,
     "prompt_name": "extractor",
     "prompt_tokens": 2436,
-    "reasoning_tokens": 589,
+    "reasoning_tokens": 295,
     "requested_model": "grok-4.5",
     "resolved_model": "grok-4.5",
     "system_fingerprint": "fp_a39489019fa99b6e",
-    "timestamp": "2026-07-30T03:09:40.851504Z"
+    "timestamp": "2026-07-30T22:28:20.834663Z"
   },
   "tool_calls": []
 }

@@ -324,16 +324,16 @@
     "tools": null
   },
   "model_call": {
-    "cached_prompt_tokens": 128,
+    "cached_prompt_tokens": 2304,
     "completion_tokens": 252,
-    "latency_ms": 5927.115458063781,
+    "latency_ms": 5792.132750153542,
     "prompt_name": "extractor",
     "prompt_tokens": 2377,
-    "reasoning_tokens": 320,
+    "reasoning_tokens": 319,
     "requested_model": "grok-4.5",
     "resolved_model": "grok-4.5",
     "system_fingerprint": "fp_a39489019fa99b6e",
-    "timestamp": "2026-07-30T03:09:53.999837Z"
+    "timestamp": "2026-07-30T22:14:24.779822Z"
   },
   "tool_calls": []
 }

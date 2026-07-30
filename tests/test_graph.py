@@ -69,16 +69,21 @@ def test_single_invoice_produces_terminal_outcome(graph) -> None:
 # Critic conditional
 # ---------------------------------------------------------------------------
 
-def test_critic_stops_after_round_1_if_no_revision(graph) -> None:
-    """INV-1013 triggers the critic (over $10k + HIGH findings) but the fake
-    provider always returns the same ESCALATE — no revision. After critic
-    round 1 sees no change, critic round 2 must be skipped."""
+def test_critic_runs_at_most_one_round(graph) -> None:
+    """Single-critic-round policy: MAX_CRITIC_ROUNDS=1. Trigger-qualified
+    invoices get exactly one critic round regardless of whether revision
+    occurred. INV-1013 has both HIGH findings and total > threshold, so
+    the trigger fires; the cap stops after round 1."""
+    from src.config import MAX_CRITIC_ROUNDS
+    assert MAX_CRITIC_ROUNDS == 1, (
+        "Policy: single critic round. If MAX_CRITIC_ROUNDS changes, this "
+        "test needs updating alongside DECISIONS.md."
+    )
     state = _invoke(graph, "data/invoices/invoice_1013.json")
     critic_count = sum(1 for n in state.get("nodes_fired", []) if n.startswith("critique"))
-    # With the convergence gate, only round 1 fires when revision doesn't occur
     assert critic_count == 1, (
-        f"expected exactly 1 critic round (no revision after round 1), "
-        f"got {critic_count}. Nodes: {state.get('nodes_fired')}"
+        f"expected exactly 1 critic round; got {critic_count}. "
+        f"Nodes: {state.get('nodes_fired')}"
     )
     assert state.get("critic_rounds") == 1
     assert state.get("revision_occurred", False) is False

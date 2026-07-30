@@ -1,0 +1,45 @@
+{
+  "content": "{\"note\": \"QuickShip Distributers is not in the vendor master, claims to be formerly FastShip Ltd. (inactive, zero prior invoices), and shows no address or email; total $9,975 sits just under the $10k threshold. Hold payment and verify the rename/reactivation plus PO-20260115 with the vendor master owner before paying; reject if unconfirmed.\"}",
+  "fingerprint": {
+    "messages": [
+      {
+        "content": "# Scribe\n\nWrite a one-paragraph exception note for the AP clerk who will act on this invoice.\n\n## Register\n\nSpecific. Factual. No hedging. No \"based on the analysis\". No restating the finding list. It should read like a competent colleague's handoff note.\n\nModel:\n\n> *Line 3 requests 20 GadgetX; 5 in stock. Vendor has no prior orders. Recommend hold pending vendor confirmation.*\n\nNotes on the model:\n- Concrete numbers, not adjectives (\"20 GadgetX; 5 in stock\", not \"large quantity\").\n- One or two sentences.\n- Names the action the clerk should consider.\n- No mention of finding codes, severity levels, or system internals.\n\n## What you MUST NOT do\n\n- Restate the findings list.\n- Quote the Adjudicator's rationale.\n- Use words like \"critical\", \"flagged\", \"detected\", \"raised\". The clerk knows there is a finding; they need to know what to do next.\n- Use severity vocabulary (`HIGH`, `MEDIUM`, etc.).\n- Write more than three sentences.\n\n## Your output\n\n```\n{\n  \"note\": \"<one to three sentences, plain English>\"\n}\n```\n\n## The invoice, findings, and adjudicator decision\n\n### Invoice\n{\n  \"invoice_number\": \"INV-1012\",\n  \"invoice_number_raw\": \"INV 1012\",\n  \"vendor_name\": \"QuickShip Distributers\",\n  \"vendor_raw\": \"QuickShip Distributers\",\n  \"vendor_claims\": [\n    \"(formerly FastShip Ltd.)\"\n  ],\n  \"vendor_address\": null,\n  \"vendor_email\": null,\n  \"invoice_date\": \"2026-01-26\",\n  \"date_raw\": \"26-Jan-2O26\",\n  \"due_date\": \"2026-02-25\",\n  \"due_date_raw\": \"25-Feb-2026\",\n  \"payment_terms\": \"Net 30\",\n  \"references\": [\n    \"PO-20260115\"\n  ],\n  \"notes\": \"Deliver to warehouse dock B. Contact Jim at ext 4421 with questions.\",\n  \"line_items\": [\n    {\n      \"raw_item_name\": \"Widget A\",\n      \"canonical_item\": \"WidgetA\",\n      \"quantity\": 12,\n      \"unit_price_usd\": \"250.0\",\n      \"unit_price_native\": \"250.0 USD\",\n      \"line_amount_usd\": \"3000.0\",\n      \"note\": null\n    },\n    {\n      \"raw_item_name\": \"WidgetB\",\n      \"canonical_item\": \"WidgetB\",\n      \"quantity\": 7,\n      \"unit_price_usd\": \"500.0\",\n      \"unit_price_native\": \"500.0 USD\",\n      \"line_amount_usd\": \"3500.0\",\n      \"note\": null\n    },\n    {\n      \"raw_item_name\": \"Gadget X\",\n      \"canonical_item\": \"GadgetX\",\n      \"quantity\": 4,\n      \"unit_price_usd\": \"750.0\",\n      \"unit_price_native\": \"750.0 USD\",\n      \"line_amount_usd\": \"3000.0\",\n      \"note\": null\n    }\n  ],\n  \"additional_charges\": [],\n  \"stated_subtotal_usd\": \"9500.0\",\n  \"stated_tax_usd\": \"475.0\",\n  \"stated_total_usd\": \"9975.0\",\n  \"currency\": \"USD\",\n  \"source_file\": \"/Users/maximiliandaneker/dev/ap-exception-router/data/invoices/invoice_1012.pdf\",\n  \"source_format\": \"pdf\",\n  \"corrections\": [\n    {\n      \"field_path\": \"invoice_date\",\n      \"original\": \"26-Jan-2O26\",\n      \"corrected\": \"2026-01-26\",\n      \"reason\": \"OCR: letter O replaced by digit 0 in date token\"\n    },\n    {\n      \"field_path\": \"line_items[1].line_amount\",\n      \"original\": \"$3,500.O0\",\n      \"corrected\": \"3500.00\",\n      \"reason\": \"OCR: letter O replaced by digit 0 in currency token\"\n    }\n  ]\n}\n\n### Findings\n- DP-001 [INFO] INV-1012: 2 files with matching semantic_hash \u2014 RETAINED this file (most complete fields: stated_subtotal, stated_tax, payment_terms)\n- EX-001 [INFO] Extractor repaired invoice_date: '26-Jan-2O26' -> '2026-01-26'\n- EX-001 [INFO] Extractor repaired line_items[1].line_amount: '$3,500.O0' -> '3500.00'\n- VN-001 [HIGH] Vendor 'QuickShip Distributers' is not in the master\n- VN-002 [MEDIUM] Fuzzy candidate in master: 'FastShip Ltd.' (vendor claim '(formerly FastShip Ltd.)' names master vendor 'FastShip Ltd.')\n- VN-004 [HIGH] Fuzzy candidate 'FastShip Ltd.' is an INACTIVE vendor \u2014 the vendor claims (or resembles) a dormant relationship\n- PO-002 [MEDIUM] Total $9975.0 sits within 5.00% below the $10000 threshold \u2014 potential structuring signature\n\n### Adjudicator decision\noutcome: ESCALATE\nrationale: QuickShip Distributers is not in the vendor master (VN-001) and has no address or email on the invoice. It claims to be formerly FastShip Ltd. (VN-002), which is an inactive master vendor (VN-004); vendor-record lookup confirms FastShip Ltd. is inactive, and invoice history shows zero prior invoices and $0 total value, so there is no established payable trail to treat this as a routine successor payment. The $9,975 total also sits just under the $10k approval threshold (PO-002), which adds a structuring concern on top of the unverified payee. Catalog items and prices check out, and the DP-001/EX-001 items are informational only, so this is not an auto-reject on arithmetic or inventory\u2014but a human should confirm whether FastShip legitimately rebranded or reactivated as QuickShip (and whether PO-20260115 supports the order) before any payment. Resolve by verifying the rename/reactivation with the vendor or internal vendor master owner and matching the PO; if unconfirmed, reject.\n",
+        "role": "user"
+      }
+    ],
+    "model": "grok-4.5",
+    "response_format": {
+      "json_schema": {
+        "name": "ScribeOutput",
+        "schema": {
+          "properties": {
+            "note": {
+              "title": "Note",
+              "type": "string"
+            }
+          },
+          "required": [
+            "note"
+          ],
+          "title": "ScribeOutput",
+          "type": "object"
+        }
+      },
+      "type": "json_schema"
+    },
+    "tools": null
+  },
+  "model_call": {
+    "cached_prompt_tokens": 128,
+    "completion_tokens": 81,
+    "latency_ms": 6752.5007501244545,
+    "prompt_name": "scribe",
+    "prompt_tokens": 1711,
+    "reasoning_tokens": 420,
+    "requested_model": "grok-4.5",
+    "resolved_model": "grok-4.5",
+    "system_fingerprint": "fp_a39489019fa99b6e",
+    "timestamp": "2026-07-30T22:31:55.536676Z"
+  },
+  "tool_calls": []
+}

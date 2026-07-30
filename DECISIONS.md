@@ -520,3 +520,49 @@ The FastShip dormant-relationship chain is present in the final rationale ("Quic
 2026-07-30
 
 ---
+
+**Decision:** `MAX_CRITIC_ROUNDS` dropped from 2 to 1. A single critic round runs on every invoice meeting `CRITIC_TRIGGER`; there is no second round regardless of whether revision occurred.
+**Alternatives considered:** Keep MAX=2 and raise the model-call cap; keep MAX=2 with the convergence gate; introduce a differently-shaped round 2.
+**Why:** The second critic round receives the same invoice, same findings, same tools, and same prompt as the first — its only new input is the revised rationale. It is a re-roll of the same challenge, not a new one. The INV-1003 diagnostic showed the convergence gate treating "revision occurred" as license for another round, meaning every case complex enough to warrant revision automatically tripped the model-call budget. A critic that runs until the budget stops it is not reasoning, it is ceremony.
+
+**Future work (not implemented, out of scope):** a second round would be justified if given a DIFFERENT job — e.g. "assess whether the adjudicator's revision is sound" rather than re-issuing the original challenge. That is a design change, not a parameter change. The convergence check was removed with this policy since it became dead code once MAX=1.
+2026-07-30
+
+---
+
+**Decision:** `MAX_MODEL_CALLS_PER_INVOICE` raised from 8 to 10. Scribe remains excluded from the count.
+**Alternatives considered:** Keep at 8; lower `MAX_INVESTIGATION_TURNS` from 3 to 2; make revised adjudicate single-turn.
+**Why:** Cap 8 was set assuming revised adjudicate uses 2 calls (1 investigation + 1 synthesis). INV-1004 tripped when its revised adjudicator legitimately used 3 (2 investigation turns + synthesis) on the corpus's hardest duplicate case. True worst-case under the single-critic policy is 3 (adjudicate) + 3 (critic) + 3 (revised adjudicate) = 9 agent-loop calls; cap 9 sits exactly at the ceiling and trips on any variance. Cap 10 gives one slot of headroom. The cap remains a runaway-spend rail, not a design constraint — it must never trip on a legitimate deep investigation, and INV-1004's revised adjudicator taking a second look at a DP-002 collision is legitimate.
+
+Reducing `MAX_INVESTIGATION_TURNS` to 2 was rejected: that would cap the investigation itself rather than the budget. INV-1004's initial adjudicator used all 3 turns to unpack the duplicate; forcing 2 would truncate reasoning on the hardest case for no gain.
+2026-07-30
+
+---
+
+**Decision:** Full corpus completed successfully live on 2026-07-30 under the new caps and policies. 16/16 invoices ran through the graph, zero circuit-breaker trips, all outcomes and rationales produced. Distribution and per-invoice metrics:
+
+| # | file | invoice | outcome | crit | rev | mdls | tls | $cost | sec |
+|---|---|---|---|---|---|---|---|---|---|
+| 1 | invoice_1001.txt | INV-1001 | APPROVE | 0 | | 2 | 0 | $0.01199 | 14.9 |
+| 2 | invoice_1002.txt | INV-1002 | ESCALATE | 1 | | 9 | 8 | $0.09178 | 130.2 |
+| 3 | invoice_1003.txt | INV-1003 | ESCALATE | 1 | yes | 9 | 10 | $0.09673 | 128.8 |
+| 4 | invoice_1004.json | INV-1004 | REJECT | 1 | yes | 10 | 6 | $0.08626 | 107.9 |
+| 5 | invoice_1005.json | INV-1005 | ESCALATE | 1 | yes | 9 | 10 | $0.08720 | 90.1 |
+| 6 | invoice_1006.csv | INV-1006 | APPROVE | 0 | | 2 | 0 | $0.01214 | 8.1 |
+| 7 | invoice_1007.csv | INV-1007 | ESCALATE | 1 | | 9 | 9 | $0.09307 | 116.8 |
+| 8 | invoice_1008.txt | INV-1008 | REJECT | 1 | yes | 9 | 10 | $0.08737 | 92.6 |
+| 9 | invoice_1009.json | INV-1009 | REJECT | 1 | | 8 | 7 | $0.07280 | 84.2 |
+| 10 | invoice_1010.txt | INV-1010 | ESCALATE | 1 | | 9 | 8 | $0.08229 | 90.3 |
+| 11 | invoice_1011.pdf | INV-1011 | APPROVE | 0 | | 3 | 1 | $0.02012 | 17.2 |
+| 12 | invoice_1012.pdf | INV-1012 | ESCALATE | 1 | | 9 | 11 | $0.10049 | 114.9 |
+| 13 | invoice_1013.json | INV-1013 | ESCALATE | 1 | | 9 | 9 | $0.10963 | 132.6 |
+| 14 | invoice_1014.xml | INV-1014 | ESCALATE | 1 | | 9 | 7 | $0.07684 | 91.1 |
+| 15 | invoice_1015.csv | INV-1015 | APPROVE | 0 | | 2 | 0 | $0.01178 | 7.5 |
+| 16 | invoice_1016.json | INV-1016 | ESCALATE | 1 | | 9 | 9 | $0.08171 | 81.2 |
+
+Distribution: **4 APPROVE / 9 ESCALATE / 3 REJECT** (vs 5/7/5 target). Divergence from target is toward ESCALATE, consistent with the "escalate liberally" prompt guidance. INV-1011 escalated where it approved on a prior run — Grok non-determinism on a clean invoice; not a regression of the pipeline. Total spend $1.12223, mean per-invoice $0.07014. Extraction cassettes (Phase 3) unchanged; 40+ new adjudicator/critic/scribe cassettes recorded.
+
+Also added a running cost printout to `scripts/adjudicate_corpus.py` after each completed invoice — `cum=$X.XXXXX` so an interrupted batch immediately shows where spend stands rather than requiring reconstruction from cassettes.
+2026-07-30
+
+---

@@ -1,0 +1,111 @@
+{
+  "content": "{\n  \"outcome\": \"ESCALATE\",\n  \"rationale\": \"WidgetA is billed at two prices on this invoice (PR-003): the contracted $250 on the regular line and $300 on the rush line, which is 20% above the $250 reference and triggers PR-001 (HIGH, 5% tolerance). The rush-order label is a plausible commercial explanation for the premium, but a 20% unit-price overcharge is still outside contracted rates and is not something the system should auto-accept. Please confirm with the buyer or vendor that the $300 rush rate was authorized (or rebill the rush line at $250 plus a separate rush fee); if approved, the invoice can be paid as stated.\",\n  \"confidence\": 0.85,\n  \"finding_codes_referenced\": [\"PR-001\", \"PR-003\"]\n}",
+  "fingerprint": {
+    "messages": [
+      {
+        "content": "# Adjudicator\n\nYou are the exception adjudicator for an AP (accounts payable) system. Your job is to look at one invoice, the deterministic findings raised against it, and \u2014 if you need more evidence \u2014 the results of tool calls, and decide what to do with it.\n\n## What arrives as SETTLED FACT\n\nThe following are already computed and audited. Trust them; do NOT recompute:\n\n- Every monetary value on the invoice (line totals, subtotal, tax, grand total)\n- Every arithmetic check (line totals vs qty \u00d7 price; subtotal vs sum of lines; grand total vs subtotal + tax + additional_charges; sign of the delta)\n- Every inventory check (unknown item, zero-stock inactive item, aggregate quantity exceeds standing stock)\n- Every price comparison (already done in USD, post-FX)\n- The $10,000 approval threshold and the 5% near-threshold band\n- The vendor's presence or absence in the master\n- Whether the invoice number matches any prior submission (duplicate class DP-*)\n- Every declared correction the extractor made (EX-001)\n\nIf a finding says \"the stated total does not equal subtotal + tax + additional_charges by $110\", that is arithmetic that has been done for you. Do NOT re-check the math. Trust the finding.\n\n## The three outcomes\n\n- **APPROVE** \u2014 no finding is disqualifying, given what you can see and what tools return. Pay it.\n- **REJECT** \u2014 the invoice cannot be paid under any reasonable reading. A negative total, a fabricated vendor with fraud signals and no plausible resolution, or two identical hashes charged as separate invoices.\n- **ESCALATE** \u2014 resolution requires information the system does not have, or a judgment a human should own.\n\n**Escalate liberally.** Wrongly rejecting a legitimate invoice costs a vendor relationship. Wrongly approving a fraudulent one costs money. Escalating costs an AP clerk four minutes. When genuinely uncertain, escalate and state what would resolve it (e.g. \"confirm with vendor whether R1 supersedes the original; if so, void the original PO\").\n\n## Severity interpretation\n\n- **CRITICAL** \u2014 the invoice cannot auto-approve (code enforces this).\n- **HIGH** \u2014 a substantive defect; usually escalate unless a tool result cleanly resolves it.\n- **MEDIUM** \u2014 an anomaly worth surfacing; may still approve if the anomaly has an obvious innocent reading.\n- **LOW** \u2014 noted; rarely decision-relevant on its own.\n- **INFO** \u2014 informational only. Do NOT escalate solely on INFO. An invoice whose only findings are INFO should APPROVE. INFO findings are the audit trail of the system doing its job (extractor repairs, successful deduplication) \u2014 they are not defects.\n\n## Tool use \u2014 required patterns\n\nYou have five read-only lookup tools. Certain finding shapes trigger a REQUIRED tool call. Do the tool call before writing your rationale; then cite the tool result in the rationale.\n\nThe required patterns are:\n\n1. **Any `vendor_claims` entry asserting a former name, DBA, or rename** (e.g. `(formerly FastShip Ltd.)`):\n   - REQUIRED: call `get_vendor_record` with the claimed name (the text inside the parens, stripped of the word \"formerly\").\n   - REQUIRED: if the claimed name resolves to a master entry (whether active or inactive), also call `get_vendor_invoice_history` on that master name to see when the relationship was last active.\n   - Even if a finding already names the candidate, do the tool call. It verifies current master status at decision time and puts the audit trail in the run record.\n\n2. **Any `DP-*` finding**:\n   - REQUIRED: call `get_prior_invoice` with the normalized invoice number. `DP-002` (differing content, same number) is only actionable when you know whether the prior was paid. `DP-001` benefits from confirming which file was retained.\n\n3. **Any `IN-001` (unknown item)**:\n   - Optional but useful: call `get_item_reference` with the raw item name to confirm the tool agrees the item is unknown (a canonicalization gap would be a bug, not a finding).\n\n4. **Any finding whose documented meaning you are uncertain of**:\n   - Call `get_policy(finding_code)` for the documented trigger, detection method, and rationale.\n\n`get_vendor_record` returns fuzzy candidates with a `match_threshold` (currently `0.70`) and a per-candidate `below_threshold` flag. Candidates flagged `below_threshold=True` are **neighborhood noise, not name matches** \u2014 they are corroborating context only, and 0.35 vs 0.34 does not imply meaningful ordering. Fuzzy similarity alone never resolves a vendor identity question; the exact substring match against `vendor_claims` (score `1.0`) is what carries the finding.\n\n## What you MUST NOT do\n\n- Recompute any arithmetic. If a stated total is wrong by $50, a validator has already emitted `AR-004` with the signed delta.\n- Re-check stock, aggregate quantities, or price ratios.\n- Apply the $10,000 threshold. `PO-001` and `PO-002` are the answer to that question.\n- Doubt or dismiss a finding because you \"don't think it's a big deal\". The finding is a fact. Your job is to weigh it, not to argue with it.\n- Downgrade a `CRITICAL` finding. Code enforces that no invoice with a CRITICAL finding can auto-approve \u2014 you cannot bypass this even if you disagree.\n\n## Your output\n\nReturn JSON matching this shape:\n\n```\n{\n  \"outcome\": \"APPROVE\" | \"REJECT\" | \"ESCALATE\",\n  \"rationale\": \"<one paragraph, legible to an AP clerk, referencing specific finding codes>\",\n  \"confidence\": <float in [0.0, 1.0]>,\n  \"finding_codes_referenced\": [\"AR-004\", \"DP-002\", ...]\n}\n```\n\nThe rationale must:\n- Name the specific findings that drove the outcome, by code\n- Reference tool results if you used them\n- Be readable by an AP clerk who cares about the invoice, not the pipeline. Prefer plain English over jargon.\n- Say what would resolve an escalation\n\n## The invoice, findings, and any prior critic challenge\n\n### Invoice\n{\n  \"invoice_number\": \"INV-1010\",\n  \"invoice_number_raw\": \"INV-1010\",\n  \"vendor_name\": \"Consolidated Materials Group\",\n  \"vendor_raw\": \"Consolidated Materials Group\",\n  \"vendor_claims\": [],\n  \"vendor_address\": null,\n  \"vendor_email\": null,\n  \"invoice_date\": \"2026-01-27\",\n  \"date_raw\": \"January 27, 2026\",\n  \"due_date\": \"2026-02-26\",\n  \"due_date_raw\": \"February 26, 2026\",\n  \"payment_terms\": \"Net 30\",\n  \"references\": [],\n  \"notes\": \"Thank you for your business!\",\n  \"line_items\": [\n    {\n      \"raw_item_name\": \"WidgetA\",\n      \"canonical_item\": \"WidgetA\",\n      \"quantity\": 8,\n      \"unit_price_usd\": \"250.0\",\n      \"unit_price_native\": \"250.0 USD\",\n      \"line_amount_usd\": \"2000.0\",\n      \"note\": null\n    },\n    {\n      \"raw_item_name\": \"WidgetB\",\n      \"canonical_item\": \"WidgetB\",\n      \"quantity\": 4,\n      \"unit_price_usd\": \"500.0\",\n      \"unit_price_native\": \"500.0 USD\",\n      \"line_amount_usd\": \"2000.0\",\n      \"note\": null\n    },\n    {\n      \"raw_item_name\": \"GadgetX\",\n      \"canonical_item\": \"GadgetX\",\n      \"quantity\": 2,\n      \"unit_price_usd\": \"750.0\",\n      \"unit_price_native\": \"750.0 USD\",\n      \"line_amount_usd\": \"1500.0\",\n      \"note\": null\n    },\n    {\n      \"raw_item_name\": \"WidgetA (rush order)\",\n      \"canonical_item\": \"WidgetA\",\n      \"quantity\": 4,\n      \"unit_price_usd\": \"300.0\",\n      \"unit_price_native\": \"300.0 USD\",\n      \"line_amount_usd\": \"1200.0\",\n      \"note\": null\n    }\n  ],\n  \"additional_charges\": [\n    {\n      \"label\": \"Shipping\",\n      \"amount_usd\": \"150.0\"\n    }\n  ],\n  \"stated_subtotal_usd\": \"6700.0\",\n  \"stated_tax_usd\": \"335.0\",\n  \"stated_total_usd\": \"7185.0\",\n  \"currency\": \"USD\",\n  \"source_file\": \"/Users/maximiliandaneker/dev/ap-exception-router/data/invoices/invoice_1010.txt\",\n  \"source_format\": \"txt\",\n  \"corrections\": []\n}\n\n### Findings\n- PR-001 [HIGH] WidgetA: unit price $300.0 exceeds reference $250 by 20.0% (tolerance 5.0%)  (evidence: native=300.0 USD, usd=300.0, ref=250)  (at line_items[3].unit_price)\n- PR-003 [MEDIUM] WidgetA appears at multiple prices within the invoice: $250.0, $300.0  (evidence: prices=[Decimal('250.0'), Decimal('300.0')])  (at line_items)\n",
+        "role": "user"
+      },
+      {
+        "content": "I'll look up the policies for the price findings and verify the WidgetA reference price.",
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "function": {
+              "arguments": "{\"finding_code\": \"PR-001\"}",
+              "name": "get_policy"
+            },
+            "id": "call-7dc604a6-5303-4e04-bbc3-b7a7980d7d9f-0",
+            "type": "function"
+          },
+          {
+            "function": {
+              "arguments": "{\"finding_code\": \"PR-003\"}",
+              "name": "get_policy"
+            },
+            "id": "call-7dc604a6-5303-4e04-bbc3-b7a7980d7d9f-1",
+            "type": "function"
+          },
+          {
+            "function": {
+              "arguments": "{\"item\": \"WidgetA\"}",
+              "name": "get_item_reference"
+            },
+            "id": "call-7dc604a6-5303-4e04-bbc3-b7a7980d7d9f-2",
+            "type": "function"
+          }
+        ]
+      },
+      {
+        "content": "{\"code\": \"PR-001\", \"found\": true, \"trigger\": \"Unit price > reference \\u00d7 (1 + tolerance)\", \"detection\": \"`unit_price.amount_usd > reference \\u00d7 1.05`\", \"rationale\": \"Overcharge relative to contracted price.\", \"corpus_examples\": [\"INV-1014\"]}",
+        "role": "tool",
+        "tool_call_id": "call-7dc604a6-5303-4e04-bbc3-b7a7980d7d9f-0"
+      },
+      {
+        "content": "{\"code\": \"PR-003\", \"found\": true, \"trigger\": \"Same canonical item at different unit prices within one invoice\", \"detection\": \"Group line items by canonical name, check price uniqueness\", \"rationale\": \"Legitimate volume discounts appear this way; so do keying errors. The Adjudicator decides.\", \"corpus_examples\": [\"INV-1010\", \"INV-1013\"]}",
+        "role": "tool",
+        "tool_call_id": "call-7dc604a6-5303-4e04-bbc3-b7a7980d7d9f-1"
+      },
+      {
+        "content": "{\"query\": \"WidgetA\", \"found\": true, \"canonical_name\": \"WidgetA\", \"stock\": 15, \"reference_unit_price\": \"250\", \"category\": \"component\", \"active\": true}",
+        "role": "tool",
+        "tool_call_id": "call-7dc604a6-5303-4e04-bbc3-b7a7980d7d9f-2"
+      },
+      {
+        "content": "Based on your investigation above, produce your final answer as JSON matching the response schema. Do not call any tools; you have all the information you need.",
+        "role": "user"
+      }
+    ],
+    "model": "grok-4.5",
+    "response_format": {
+      "json_schema": {
+        "name": "AdjudicatorOutput",
+        "schema": {
+          "properties": {
+            "confidence": {
+              "title": "Confidence",
+              "type": "number"
+            },
+            "finding_codes_referenced": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Finding Codes Referenced",
+              "type": "array"
+            },
+            "outcome": {
+              "title": "Outcome",
+              "type": "string"
+            },
+            "rationale": {
+              "title": "Rationale",
+              "type": "string"
+            }
+          },
+          "required": [
+            "outcome",
+            "rationale",
+            "confidence"
+          ],
+          "title": "AdjudicatorOutput",
+          "type": "object"
+        }
+      },
+      "type": "json_schema"
+    },
+    "tools": null
+  },
+  "model_call": {
+    "cached_prompt_tokens": 128,
+    "completion_tokens": 183,
+    "latency_ms": 9336.974709294736,
+    "prompt_name": "adjudicator_synthesize",
+    "prompt_tokens": 2787,
+    "reasoning_tokens": 458,
+    "requested_model": "grok-4.5",
+    "resolved_model": "grok-4.5",
+    "system_fingerprint": "fp_a39489019fa99b6e",
+    "timestamp": "2026-07-30T22:28:39.458992Z"
+  },
+  "tool_calls": []
+}
