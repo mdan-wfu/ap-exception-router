@@ -184,7 +184,11 @@ class Invoice(BaseModel):
     source_file: str
     source_format: str
     corrections: list[Correction] = Field(default_factory=list)
-    extraction_confidence: float = 1.0
+    # Default None, not 1.0: a missing value must not become maximum confidence.
+    # Deterministic adapters set 1.0 explicitly (a structured parse either
+    # succeeds exactly or raises). LLM adapters carry through what the model
+    # self-reports; if it reports nothing, None survives — the honest signal.
+    extraction_confidence: float | None = None
 
     # Two hashes serve two different duplicate-detection questions.
     #

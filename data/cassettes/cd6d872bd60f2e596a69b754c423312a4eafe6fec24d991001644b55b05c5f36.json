@@ -169,9 +169,16 @@
               "title": "Due Date Raw"
             },
             "extraction_confidence": {
-              "default": 1.0,
-              "title": "Extraction Confidence",
-              "type": "number"
+              "anyOf": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Extraction Confidence"
             },
             "invoice_date": {
               "anyOf": [
@@ -317,16 +324,16 @@
     "tools": null
   },
   "model_call": {
-    "cached_prompt_tokens": 2304,
+    "cached_prompt_tokens": 128,
     "completion_tokens": 252,
-    "latency_ms": 5478.777625132352,
+    "latency_ms": 5927.115458063781,
     "prompt_name": "extractor",
-    "prompt_tokens": 2368,
-    "reasoning_tokens": 178,
+    "prompt_tokens": 2377,
+    "reasoning_tokens": 320,
     "requested_model": "grok-4.5",
     "resolved_model": "grok-4.5",
     "system_fingerprint": "fp_a39489019fa99b6e",
-    "timestamp": "2026-07-29T21:10:10.280339Z"
+    "timestamp": "2026-07-30T03:09:53.999837Z"
   },
   "tool_calls": []
 }

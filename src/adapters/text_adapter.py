@@ -83,7 +83,9 @@ class ExtractedInvoice(BaseModel):
     references: list[str] = Field(default_factory=list)
     notes: str | None = None
     corrections: list[_ExtCorrection] = Field(default_factory=list)
-    extraction_confidence: float = 1.0
+    # Default None so a model that omits the field doesn't get scored 1.0
+    # by our own default. See Invoice.extraction_confidence in src/schema.py.
+    extraction_confidence: float | None = None
 
 
 # ---------------------------------------------------------------------------

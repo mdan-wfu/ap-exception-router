@@ -80,6 +80,7 @@ def extract(path: Path) -> Invoice:
         payment_terms=_text(root, "payment_terms") or None,
         source_file=str(path),
         source_format="xml",
+        extraction_confidence=1.0,
         file_hash=Invoice.compute_file_hash(raw_bytes),
     )
 

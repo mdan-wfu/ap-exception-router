@@ -253,3 +253,17 @@ Append-only. Each entry: Decision / Alternatives considered / Why + date.
 2026-07-29
 
 ---
+
+**Decision:** `Invoice.extraction_confidence` and `ExtractedInvoice.extraction_confidence` default to `None`, not `1.0`. Deterministic adapters (json/csv/xml) set `extraction_confidence=1.0` explicitly; the LLM adapter carries through whatever the model self-reports, and `None` if the model omits the field.
+**Alternatives considered:** Keep default `1.0`; validate that the model always reports a value; drop the field entirely.
+**Why:** A missing value silently defaulting to `1.0` means the model asserting maximum confidence precisely when it reported nothing — the worst-possible dishonesty in a system whose whole point is escalating uncertainty. `None` is the honest representation. Deterministic 1.0 is defensible because a structured parse either succeeds exactly or raises. The two 1.0s (deterministic vs LLM self-report) are NOT the same unit and must not be compared as though they were — the Phase 11 dashboard should label them distinctly (e.g. "parsed" vs "self-reported").
+2026-07-29
+
+---
+
+**Decision:** `extraction_confidence` is recorded on every Invoice but never gates any downstream behaviour. `_common.field_coverage()` was deleted with the fallback-scope fix and there is no upstream confidence threshold.
+**Alternatives considered:** Reject or fall-back on low confidence; add a confidence-based severity boost in Phase 4.
+**Why:** LLM extraction quality is detected downstream by validator findings — an extraction that hallucinated a total will trip an `AR-` (arithmetic mismatch) finding when the recomputed total differs; one that missed a vendor trips `VN-005` (missing name). These are more specific and more actionable than any upstream coverage or confidence threshold could be. A finding says "the total in the document does not match the sum of its line items"; a low confidence score says "I feel bad about this one." Only the finding is investigable.
+2026-07-29
+
+---

@@ -112,6 +112,7 @@ def _parse_vertical(path: Path, raw_bytes: bytes, rows: list[list[str]]) -> Invo
         payment_terms=scalars.get("payment_terms") or None,
         source_file=str(path),
         source_format="csv",
+        extraction_confidence=1.0,
         file_hash=Invoice.compute_file_hash(raw_bytes),
     )
 
@@ -191,6 +192,7 @@ def _parse_row_per_item(path: Path, raw_bytes: bytes, rows: list[list[str]]) -> 
         stated_total=money(summary.get("total"), currency),
         source_file=str(path),
         source_format="csv",
+        extraction_confidence=1.0,
         file_hash=Invoice.compute_file_hash(raw_bytes),
     )
 

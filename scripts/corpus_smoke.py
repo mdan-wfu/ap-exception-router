@@ -64,7 +64,7 @@ def main() -> int:
                 str(len(inv.line_items)),
                 total,
                 str(len(inv.corrections)),
-                f"{inv.extraction_confidence:.2f}",
+                f"{inv.extraction_confidence:.2f}" if inv.extraction_confidence is not None else "-",
             )
         except Exception as exc:
             failures.append((path, exc))
