@@ -321,3 +321,10 @@ Append-only. Each entry: Decision / Alternatives considered / Why + date.
 2026-07-29
 
 ---
+
+**Decision (correcting a prior entry):** `DP-001` severity downgraded from MEDIUM to INFO. Also, the finding message now records which file was RETAINED and the completeness reason.
+**Alternatives considered:** Keep at MEDIUM; drop DP-001 entirely once a file is chosen; escalate to HIGH so a human always confirms the pairing.
+**Why:** DP-001 means the deduplicator successfully identified two files as one invoice and picked the more complete record. That is the system operating correctly — it does not require human attention. At MEDIUM, INV-1011 (whose ONLY finding is DP-001) would push toward ESCALATE when it should cleanly APPROVE. MEDIUM+ is reserved for duplicates the system could NOT resolve, which is DP-002 (already CRITICAL). Retaining the finding at INFO keeps the audit trail (which file was retained, why) without polluting the exception queue.
+2026-07-29
+
+---

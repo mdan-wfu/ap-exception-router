@@ -202,6 +202,43 @@ def test_duplicates_dp_001_on_inv_1011_txt_pdf_pair(reference):
         f"Expected DP-001 on both files; got: {codes}"
     )
     assert "DP-002" not in codes
+    # All DP-001 findings are INFO — the deduplicator working, not an exception
+    assert all(f.severity == Severity.INFO for _, f in pairs if f.code == "DP-001")
+
+
+def test_dp_001_message_records_retained_file(reference):
+    """The audit trail must show which file was kept and why."""
+    inv_txt = extract(INVOICES / "invoice_1011.txt").invoice
+    inv_pdf = extract(INVOICES / "invoice_1011.pdf").invoice
+    pairs = find([inv_txt, inv_pdf])
+    kept_msgs = [f.message for _, f in pairs if "RETAINED" in f.message]
+    dropped_msgs = [f.message for _, f in pairs if "dropped" in f.message]
+    assert len(kept_msgs) == 1, "exactly one file must be RETAINED"
+    assert len(dropped_msgs) == 1, "exactly one file must be dropped"
+
+
+def test_inv_1011_has_no_finding_above_info(reference):
+    """INV-1011 is the clean duplicate-pair case. Its ONLY finding is DP-001,
+    which is INFO. The invoice must not surface as an exception."""
+    all_invoices = [
+        extract(INVOICES / "invoice_1011.txt").invoice,
+        extract(INVOICES / "invoice_1011.pdf").invoice,
+    ]
+    # Per-invoice validators + duplicate pass
+    all_findings = []
+    for inv in all_invoices:
+        all_findings.extend(run_validators(inv, reference))
+    for _inv, f in find(all_invoices):
+        all_findings.append(f)
+
+    above_info = [
+        f for f in all_findings
+        if f.severity not in (Severity.INFO,)
+    ]
+    assert above_info == [], (
+        f"INV-1011 must produce no finding above INFO. Got: "
+        f"{[(f.code, f.severity.value, f.message) for f in above_info]}"
+    )
 
 
 def test_duplicates_dp_002_and_dp_003_on_inv_1004_pair(reference):

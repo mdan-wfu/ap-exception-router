@@ -13,6 +13,7 @@ Grouping:
 from __future__ import annotations
 
 from collections import defaultdict
+from pathlib import Path
 
 from src.schema import Finding, Invoice, Severity
 
@@ -29,20 +30,31 @@ def find(invoices: list[Invoice]) -> list[tuple[Invoice, Finding]]:
 
         hashes = {inv.semantic_hash for inv in group}
         if len(hashes) == 1:
-            # DP-001 — same invoice, multiple files
-            chosen, others = _pick_most_complete(group)
+            # DP-001 — same invoice, multiple files. INFO severity: this is
+            # the deduplicator operating correctly, not an exception requiring
+            # human attention. MEDIUM+ is reserved for duplicates the system
+            # could not resolve (DP-002).
+            chosen, _others = _pick_most_complete(group)
+            reason = _completeness_reason(chosen, group)
             for inv in group:
-                role = "preferred" if inv is chosen else "duplicate of preferred"
+                if inv is chosen:
+                    msg = (
+                        f"{number}: {len(group)} files with matching "
+                        f"semantic_hash — RETAINED this file ({reason})"
+                    )
+                else:
+                    msg = (
+                        f"{number}: {len(group)} files with matching "
+                        f"semantic_hash — dropped; retained "
+                        f"{Path(chosen.source_file).name} ({reason})"
+                    )
                 out.append((inv, Finding(
                     code="DP-001",
-                    severity=Severity.MEDIUM,
-                    message=(
-                        f"{number}: {len(group)} files with matching semantic_hash — "
-                        f"this is the {role}"
-                    ),
+                    severity=Severity.INFO,
+                    message=msg,
                     evidence=(
                         f"group_files={[i.source_file for i in group]}, "
-                        f"preferred={chosen.source_file}"
+                        f"retained={chosen.source_file}, reason={reason}"
                     ),
                     field_path="source_file",
                 )))
@@ -91,3 +103,25 @@ def _pick_most_complete(group: list[Invoice]) -> tuple[Invoice, list[Invoice]]:
 
     ranked = sorted(group, key=score, reverse=True)
     return ranked[0], ranked[1:]
+
+
+def _completeness_reason(chosen: Invoice, group: list[Invoice]) -> str:
+    """Human-readable explanation of why `chosen` was retained."""
+    chosen_present = [
+        name for name, present in [
+            ("stated_subtotal", chosen.stated_subtotal is not None),
+            ("stated_tax", chosen.stated_tax is not None),
+            ("payment_terms", chosen.payment_terms is not None),
+            ("vendor_address", chosen.vendor_address is not None),
+        ] if present
+    ]
+    others_lines = [len(i.line_items) for i in group if i is not chosen]
+    if others_lines and len(chosen.line_items) > max(others_lines):
+        return (
+            f"more line items ({len(chosen.line_items)} vs "
+            f"{max(others_lines)}); fields present: "
+            f"{', '.join(chosen_present) or 'none'}"
+        )
+    return (
+        f"most complete fields: {', '.join(chosen_present) or 'none present'}"
+    )

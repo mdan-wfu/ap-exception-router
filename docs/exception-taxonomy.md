@@ -99,7 +99,7 @@ Batch-scoped. Not run per single-invoice; the router's `find_duplicates(invoices
 
 | Code | Severity | Trigger | Detection | Rationale | Corpus |
 |---|---|---|---|---|---|
-| `DP-001` | MEDIUM | Multiple files with the same normalized invoice number AND matching `semantic_hash` | Group by `invoice_number`, then partition by `semantic_hash`. Groups with size > 1 and one hash → DP-001. | Same invoice arrived twice as different files (txt + rendered PDF). Prefer the more complete record. | INV-1011, INV-1012, INV-1013 |
+| `DP-001` | INFO | Multiple files with the same normalized invoice number AND matching `semantic_hash` | Group by `invoice_number`, then partition by `semantic_hash`. Groups with size > 1 and one hash → DP-001. Message records which file was RETAINED and why (completeness reason). | Same invoice arrived twice as different files (txt + rendered PDF); the deduplicator identified them as one and chose the more complete record. This is the system operating correctly — MEDIUM+ is reserved for duplicates the system could NOT resolve (DP-002). | INV-1011, INV-1012, INV-1013 |
 | `DP-002` | CRITICAL | Multiple files with the same normalized invoice number and DIFFERING `semantic_hash` | Same grouping, multiple hashes | Same invoice number, different content — double-pay risk. | INV-1004 vs INV-1004_revised |
 | `DP-003` | HIGH | A revision marker is present on any invoice sharing a number with another | `revision:*` in `invoice.references`, or the group has any two members whose `semantic_hash` differs | Explicit revision — Adjudicator must confirm the original was not already paid. | INV-1004_revised |
 
