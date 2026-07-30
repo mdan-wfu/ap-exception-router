@@ -493,3 +493,30 @@ INV-1012's rationale post-fix still names the FastShip dormant-relationship chai
 2026-07-30
 
 ---
+
+**Decision:** Critic-loop convergence check. `route_after_adjudicate` now skips subsequent critic rounds when the adjudicator did NOT revise its outcome in the immediately-preceding round. `MAX_CRITIC_ROUNDS = 2` was being applied unconditionally, so every non-trivial invoice ran the full five-node ladder regardless of whether the first challenge changed anything. A critic exists to test a conclusion; a conclusion that survived one challenge unchanged is unlikely to be moved by a second challenge of the same shape.
+
+**This is a convergence check, not a cost optimisation** — though it is also that. Running the loop again when the first pass produced no movement is not just wasted spend, it is a signal the loop is not doing its job. The check reads `state.revision_occurred` (cumulative across prior adjudicate calls); if `rounds_so_far >= 1 and not revision_occurred`, route directly to `scribe` or `route_outcome`.
+
+**Scribe deliberately does NOT enforce the per-invoice model-call breaker.** Scribe is a single non-recursive LLM call producing a human-facing note. The breaker exists to catch agent-loop runaway (tool recursion, endless critic loops). Enforcing it in scribe just to be consistent would sometimes lose the note on an otherwise completed decision — bad trade for a bounded call. Test locked at `test_scribe_produces_note_on_escalate`.
+
+**Live verification on INV-1012 (2026-07-30, second run):**
+
+| metric | previous (no convergence check) | this run |
+|---|---|---|
+| total tool calls | 41 | **11** |
+| unique tool calls | 12 | 11 (all unique, 0 cache hits) |
+| total model calls | 17 | **9** |
+| cost | $0.184 | **$0.102** |
+| wall clock | 193s | 132.6s |
+| circuit breaker tripped | n/a | no |
+| outcome | ESCALATE | ESCALATE |
+| critic rounds | 2 | 1 |
+| revision occurred | false | false |
+
+The FastShip dormant-relationship chain is present in the final rationale ("QuickShip Distributers is not in the vendor master (VN-001) and claims to be formerly FastShip Ltd., which is an inactive master vendor with zero prior invoice history (VN-002, VN-004). Tool checks confirm FastShip Ltd. is inactive and has never been paid..."). Substance preserved end-to-end.
+
+**Test:** `tests/test_graph.py::test_critic_stops_after_round_1_if_no_revision` locks the convergence semantics using the fake provider. The old assertion "critic fires 2 rounds" was replaced with "critic fires 1 round" because the fake provider always returns the same ESCALATE — no revision — and the new gate correctly stops after round 1.
+2026-07-30
+
+---

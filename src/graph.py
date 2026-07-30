@@ -40,14 +40,35 @@ _THRESHOLD = Decimal(str(APPROVAL_THRESHOLD_USD))
 
 
 def route_after_adjudicate(state: GraphState) -> str:
-    """CRITIC_TRIGGER: stated_total > threshold OR any HIGH+ finding.
-    Cap at MAX_CRITIC_ROUNDS. After the cap (or if no trigger), route to
-    the scribe when the outcome is ESCALATE / REJECT, otherwise straight
-    to route_outcome for APPROVE.
-    """
-    if state.get("critic_rounds", 0) < MAX_CRITIC_ROUNDS and _critic_trigger(state):
-        return "critique"
+    """Route the graph after each `adjudicate` call.
 
+    Three gates on continuing to `critique`:
+      1. Rounds cap: never above MAX_CRITIC_ROUNDS.
+      2. Convergence check: after the first critic round, only continue if
+         the adjudicator actually REVISED its outcome. A conclusion that
+         survived one challenge unchanged is unlikely to be moved by a
+         second challenge of the same shape — running the loop again is
+         wasted spend and, more importantly, a signal the loop is not
+         doing its job. This is convergence, not cost optimisation.
+      3. Trigger: CRITIC_TRIGGER (total > threshold OR any HIGH+ finding).
+
+    Otherwise route to `scribe` (ESCALATE / REJECT) or directly to
+    `route_outcome` (APPROVE).
+    """
+    rounds_so_far = state.get("critic_rounds", 0)
+
+    # (2) convergence — checked BEFORE the cap so the reason is visible
+    if rounds_so_far >= 1 and not state.get("revision_occurred", False):
+        return _post_critic_target(state)
+
+    # (1) cap and (3) trigger
+    if rounds_so_far >= MAX_CRITIC_ROUNDS or not _critic_trigger(state):
+        return _post_critic_target(state)
+
+    return "critique"
+
+
+def _post_critic_target(state: GraphState) -> str:
     decision = state.get("decision")
     if decision is not None and decision.outcome in (Outcome.ESCALATE, Outcome.REJECT):
         return "scribe"

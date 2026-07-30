@@ -69,16 +69,19 @@ def test_single_invoice_produces_terminal_outcome(graph) -> None:
 # Critic conditional
 # ---------------------------------------------------------------------------
 
-def test_critic_fires_for_inv_1013_over_threshold(graph) -> None:
-    """$22,562.80 is over $10,000; critic must fire, capped at
-    MAX_CRITIC_ROUNDS (2)."""
+def test_critic_stops_after_round_1_if_no_revision(graph) -> None:
+    """INV-1013 triggers the critic (over $10k + HIGH findings) but the fake
+    provider always returns the same ESCALATE — no revision. After critic
+    round 1 sees no change, critic round 2 must be skipped."""
     state = _invoke(graph, "data/invoices/invoice_1013.json")
     critic_count = sum(1 for n in state.get("nodes_fired", []) if n.startswith("critique"))
-    assert critic_count == 2, f"expected 2 critic rounds, got {critic_count}"
-    assert state.get("critic_rounds") == 2
-    # Adjudicator ran 3 times: initial + 2 revisions after critique
-    adj_count = sum(1 for n in state.get("nodes_fired", []) if n == "adjudicate")
-    assert adj_count == 3
+    # With the convergence gate, only round 1 fires when revision doesn't occur
+    assert critic_count == 1, (
+        f"expected exactly 1 critic round (no revision after round 1), "
+        f"got {critic_count}. Nodes: {state.get('nodes_fired')}"
+    )
+    assert state.get("critic_rounds") == 1
+    assert state.get("revision_occurred", False) is False
 
 
 def test_critic_does_not_fire_for_inv_1001_clean(graph) -> None:

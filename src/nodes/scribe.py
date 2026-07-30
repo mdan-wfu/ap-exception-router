@@ -17,8 +17,7 @@ from pathlib import Path
 from pydantic import BaseModel
 
 from src.graph_state import GraphState
-from src.llm import agent_loop as _agent_loop_mod
-from src.llm.agent_loop import CircuitBreakerTripped, get_provider
+from src.llm.agent_loop import get_provider
 from src.nodes.adjudicate import _invoice_summary
 from src.schema import Outcome
 
@@ -42,13 +41,11 @@ def scribe(state: GraphState) -> dict:
     if decision is None or decision.outcome == Outcome.APPROVE:
         return {"nodes_fired": ["scribe:skipped"]}
 
-    used = len(state.get("model_calls", []))
-    cap = _agent_loop_mod.MAX_MODEL_CALLS_PER_INVOICE   # read at call time
-    if used >= cap:
-        raise CircuitBreakerTripped(
-            f"per-invoice model-call cap ({cap}) tripped in scribe; "
-            f"{used} model calls already made."
-        )
+    # Scribe deliberately does NOT enforce the per-invoice model-call
+    # breaker. It makes one non-recursive LLM call to produce a human-facing
+    # note; the breaker exists to catch agent-loop runaway (tool recursion,
+    # endless critic loops), not this. If we've reached scribe we already
+    # have a decision; the note is a small nice-to-have on top.
 
     invoice = state["invoice"]
     findings = state.get("findings", [])
