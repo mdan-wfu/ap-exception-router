@@ -239,3 +239,10 @@ Append-only. Each entry: Decision / Alternatives considered / Why + date.
 2026-07-29
 
 ---
+
+**Decision:** Canonical monetary field names on `Invoice` are `stated_subtotal`, `stated_tax`, `stated_total` — all three carrying the `stated_` prefix. Phase 4 prompts and validators reference exactly these names.
+**Alternatives considered:** Drop the prefix (`subtotal`/`tax`/`total`); use `document_subtotal`/etc.
+**Why:** The prefix signals "what the document CLAIMS", distinguishing these from any recomputed totals Phase 4 will produce. Consistent prefixing across all three prevents the class of bug where one field is prefixed and the others aren't, which invites accidental comparison of a stated value against a computed one under a similar name.
+2026-07-29
+
+---
