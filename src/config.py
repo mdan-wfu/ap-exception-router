@@ -36,9 +36,3 @@ FX_RATES: dict[str, float] = {"EUR": 1.14}
 # Critic / repair loop limits
 MAX_CRITIC_ROUNDS: int = 2
 MAX_REPAIR_ATTEMPTS: int = 2
-
-# Field coverage — the fraction of core fields (invoice_number, vendor_name,
-# line_items, stated_total) that must be non-null after a deterministic
-# parse. Below this, the triage router falls back to LLM extraction and
-# records the fallback in the run record.
-MIN_FIELD_COVERAGE: float = 0.75

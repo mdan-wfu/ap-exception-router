@@ -96,16 +96,3 @@ def money(amount: Any, currency: str = "USD") -> Money | None:
     return Money(amount_native=Decimal(str(amount)), currency=currency)
 
 
-def field_coverage(inv) -> float:
-    """Fraction of core fields that are non-null / non-empty.
-
-    Core fields: invoice_number, vendor_name, line_items, stated_total.
-    Used by the triage router to decide LLM fallback.
-    """
-    checks = [
-        bool(inv.invoice_number),
-        bool(inv.vendor_name),
-        len(inv.line_items) > 0,
-        inv.stated_total is not None,
-    ]
-    return sum(1 for c in checks if c) / len(checks)

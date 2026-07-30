@@ -246,3 +246,10 @@ Append-only. Each entry: Decision / Alternatives considered / Why + date.
 2026-07-29
 
 ---
+
+**Decision (correcting a prior entry):** Coverage-based LLM fallback removed from the router. Structured formats (json/csv/xml) fall back to the LLM ONLY on a parse exception (json.JSONDecodeError, csv.Error, xml.etree.ElementTree.ParseError, pydantic.ValidationError). Field coverage no longer triggers fallback for any adapter. `MIN_FIELD_COVERAGE` and `field_coverage()` deleted as unused.
+**Alternatives considered:** Keep coverage-based fallback but tighten the threshold; apply coverage only to LLM-native adapters.
+**Why:** For structured formats, a successful parse is authoritative. Low coverage means the SOURCE is sparse (as INV-1009 deliberately is), not that extraction failed. Falling back to the LLM on a correctly-parsed sparse document risks fabricating values the source legitimately omitted — exactly what prompts/extractor.md forbids ("Never fabricate a value. When a field is missing... return null."). LLM-native adapters (text/pdf) never fall back because they already are the LLM. The prior entry noting "no file required LLM fallback because INV-1009 sits at 3/4" was correct as far as it went, but hid a latent risk: an adversarial invoice at 2/4 or 1/4 coverage would have silently degraded a valid deterministic parse into a hallucination-prone LLM extraction. That risk was one field short of tripping on this corpus and would have shipped as a bug into Phase 10.
+2026-07-29
+
+---
