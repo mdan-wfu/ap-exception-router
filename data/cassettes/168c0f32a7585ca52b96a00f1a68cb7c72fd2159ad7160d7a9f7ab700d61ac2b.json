@@ -1,0 +1,170 @@
+{
+  "content": "{\"challenge\":\"The Adjudicator treats VN-004 as genuinely ambiguous and sends the invoice to a human, but the same evidence already decides the matter against payment. QuickShip Distributers is absent from the master (VN-001), the only linked name is an INACTIVE vendor with relationship_since 2016-10-01 and zero invoices in the audit store, and there is no re-onboarding, reactivation, or payee continuity on record. An inactive dormant name plus a first-time payee claiming succession is unauthorized under the vendor-master rules the findings already surface; the additional PO-002 near-threshold total strengthens rather than softens that reading. Nothing in the packet supplies the missing authorization, so the correct disposition is REJECT pending a proper vendor setup\u2014not ESCALATE.\",\"proposed_outcome\":\"REJECT\",\"cites_finding_codes\":[\"VN-001\",\"VN-002\",\"VN-004\",\"PO-002\"]}",
+  "fingerprint": {
+    "messages": [
+      {
+        "content": "# Critic\n\nYou argue the opposite side of the Adjudicator's decision. You are NOT a second adjudicator, a quality scorer, or a tiebreaker. Your job is to strain-test the reasoning by making the strongest case against it.\n\n## What \"the opposite side\" means\n\n- Adjudicator said **APPROVE** \u2192 argue that this invoice should be rejected or escalated. What could be wrong that the Adjudicator dismissed?\n- Adjudicator said **REJECT** \u2192 argue that this invoice may in fact be legitimate. What innocent explanation would fit the same evidence?\n- Adjudicator said **ESCALATE** \u2192 argue that the case is actually decidable, in either direction, without human involvement. What information already in the packet resolves the question?\n\n## Ground your challenge\n\nA challenge grounded in a lookup beats a rhetorical one. You have the same five tools the Adjudicator had. If your argument depends on prior history, call `get_prior_invoice` or `get_vendor_invoice_history` and cite the result. If it depends on a named alternative vendor, call `get_vendor_record` and cite whom you're pointing to. Rhetorical challenges (\"but what if it's fraud?\") are worthless without a factual hook.\n\n## What you MUST NOT do\n\n- Repeat the Adjudicator's rationale back in different words.\n- Argue that the arithmetic or stock check might be wrong. Those are validator facts, same as they were for the Adjudicator.\n- Manufacture findings the validators did not produce.\n- Recommend an outcome. You challenge; the Adjudicator decides whether to revise or hold.\n\n## Your output\n\nReturn JSON matching this shape:\n\n```\n{\n  \"challenge\": \"<one short paragraph making the strongest opposing case, grounded in evidence or a tool result>\",\n  \"proposed_outcome\": \"APPROVE\" | \"REJECT\" | \"ESCALATE\" | null,\n  \"cites_finding_codes\": [\"...\", ...]\n}\n```\n\n`proposed_outcome` is what your argument would land on if pushed to a conclusion. `null` is valid when your challenge is \"this could stand either way \u2014 the Adjudicator should decide between two plausible readings, not commit.\"\n\n## The adjudicator's decision and the invoice context\n\n### Adjudicator decision\n{\n  \"outcome\": \"ESCALATE\",\n  \"rationale\": \"QuickShip Distributers is not in the vendor master (VN-001). The invoice claims it was formerly FastShip Ltd. (VN-002); tools confirm FastShip Ltd. exists as an INACTIVE master vendor (VN-004) with relationship_since 2016-10-01 and zero invoices in the audit store, so there is no live payee or recent continuity to rely on. Policy for VN-004 calls this pattern genuinely ambiguous\\u2014legitimate rename vs. exploitation of a dormant name\\u2014and this invoice is its flagship example. The total also sits just under the $10k threshold (PO-002), which adds a structuring concern but does not by itself prove fraud. DP-001 and the EX-001 OCR repairs are INFO only and do not clear the vendor issues. A human should confirm whether FastShip was properly renamed/re-onboarded as QuickShip (and reactivate or set up the payee) or treat the claim as unauthorized before any payment.\",\n  \"confidence\": 0.92\n}\n\n### Invoice\n{\n  \"invoice_number\": \"INV-1012\",\n  \"invoice_number_raw\": \"INV 1012\",\n  \"vendor_name\": \"QuickShip Distributers\",\n  \"vendor_raw\": \"QuickShip Distributers\",\n  \"vendor_claims\": [\n    \"(formerly FastShip Ltd.)\"\n  ],\n  \"vendor_address\": null,\n  \"vendor_email\": null,\n  \"invoice_date\": \"2026-01-26\",\n  \"date_raw\": \"26-Jan-2O26\",\n  \"due_date\": \"2026-02-25\",\n  \"due_date_raw\": \"25-Feb-2026\",\n  \"payment_terms\": \"Net 30\",\n  \"references\": [\n    \"PO-20260115\"\n  ],\n  \"notes\": \"Deliver to warehouse dock B. Contact Jim at ext 4421 with questions.\",\n  \"line_items\": [\n    {\n      \"raw_item_name\": \"Widget A\",\n      \"canonical_item\": \"WidgetA\",\n      \"quantity\": 12,\n      \"unit_price_usd\": \"250.0\",\n      \"unit_price_native\": \"250.0 USD\",\n      \"line_amount_usd\": \"3000.0\",\n      \"note\": null\n    },\n    {\n      \"raw_item_name\": \"WidgetB\",\n      \"canonical_item\": \"WidgetB\",\n      \"quantity\": 7,\n      \"unit_price_usd\": \"500.0\",\n      \"unit_price_native\": \"500.0 USD\",\n      \"line_amount_usd\": \"3500.0\",\n      \"note\": null\n    },\n    {\n      \"raw_item_name\": \"Gadget X\",\n      \"canonical_item\": \"GadgetX\",\n      \"quantity\": 4,\n      \"unit_price_usd\": \"750.0\",\n      \"unit_price_native\": \"750.0 USD\",\n      \"line_amount_usd\": \"3000.0\",\n      \"note\": null\n    }\n  ],\n  \"additional_charges\": [],\n  \"stated_subtotal_usd\": \"9500.0\",\n  \"stated_tax_usd\": \"475.0\",\n  \"stated_total_usd\": \"9975.0\",\n  \"currency\": \"USD\",\n  \"source_file\": \"data/invoices/invoice_1012.txt\",\n  \"source_format\": \"txt\",\n  \"corrections\": [\n    {\n      \"field_path\": \"invoice_date\",\n      \"original\": \"26-Jan-2O26\",\n      \"corrected\": \"2026-01-26\",\n      \"reason\": \"OCR: letter O replaced by digit 0 in date token\"\n    },\n    {\n      \"field_path\": \"line_items[1].line_amount\",\n      \"original\": \"$3,500.O0\",\n      \"corrected\": \"3500.00\",\n      \"reason\": \"OCR: letter O replaced by digit 0 in currency token\"\n    }\n  ]\n}\n\n### Findings\n- DP-001 [INFO] INV-1012: 2 files with matching semantic_hash \u2014 dropped; retained invoice_1012.pdf (most complete fields: stated_subtotal, stated_tax, payment_terms)\n- EX-001 [INFO] Extractor repaired invoice_date: '26-Jan-2O26' -> '2026-01-26'\n- EX-001 [INFO] Extractor repaired line_items[1].line_amount: '$3,500.O0' -> '3500.00'\n- VN-001 [HIGH] Vendor 'QuickShip Distributers' is not in the master\n- VN-002 [MEDIUM] Fuzzy candidate in master: 'FastShip Ltd.' (vendor claim '(formerly FastShip Ltd.)' names master vendor 'FastShip Ltd.')\n- VN-004 [HIGH] Fuzzy candidate 'FastShip Ltd.' is an INACTIVE vendor \u2014 the vendor claims (or resembles) a dormant relationship\n- PO-002 [MEDIUM] Total $9975.0 sits within 5.00% below the $10000 threshold \u2014 potential structuring signature\n",
+        "role": "user"
+      }
+    ],
+    "model": "grok-4.5",
+    "response_format": {
+      "json_schema": {
+        "name": "CriticOutput",
+        "schema": {
+          "properties": {
+            "challenge": {
+              "title": "Challenge",
+              "type": "string"
+            },
+            "cites_finding_codes": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Cites Finding Codes",
+              "type": "array"
+            },
+            "proposed_outcome": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Proposed Outcome"
+            }
+          },
+          "required": [
+            "challenge"
+          ],
+          "title": "CriticOutput",
+          "type": "object"
+        }
+      },
+      "type": "json_schema"
+    },
+    "tools": [
+      {
+        "function": {
+          "description": "Look up a vendor in the master. Returns the exact record if one exists, plus any fuzzy candidates with match scores and each candidate's status (active/inactive) and relationship_since date. The Adjudicator interprets these facts; the tool does not.",
+          "name": "get_vendor_record",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "title": "Name",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "title": "VendorRecordQuery",
+            "type": "object"
+          }
+        },
+        "type": "function"
+      },
+      {
+        "function": {
+          "description": "Prior invoices for this vendor from the audit store: count, total value in USD, first and last seen dates, and a count of prior outcomes by type. Zero on an empty store \u2014 a first-time payee is a valid answer, not an error.",
+          "name": "get_vendor_invoice_history",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "title": "Name",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "title": "VendorHistoryQuery",
+            "type": "object"
+          }
+        },
+        "type": "function"
+      },
+      {
+        "function": {
+          "description": "Look up an inventory item by name (canonicalized first). Returns stock, reference_unit_price, category, and active flag. Never fuzzy-matches items \u2014 an unknown item returns found=False.",
+          "name": "get_item_reference",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "item": {
+                "title": "Item",
+                "type": "string"
+              }
+            },
+            "required": [
+              "item"
+            ],
+            "title": "ItemQuery",
+            "type": "object"
+          }
+        },
+        "type": "function"
+      },
+      {
+        "function": {
+          "description": "Look up any prior submission of this invoice number in the audit store. Returns semantic_hash, stated total, source file, and prior outcome. Empty result on first submission \u2014 that is the meaningful answer for a new invoice.",
+          "name": "get_prior_invoice",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "invoice_number": {
+                "title": "Invoice Number",
+                "type": "string"
+              }
+            },
+            "required": [
+              "invoice_number"
+            ],
+            "title": "PriorInvoiceQuery",
+            "type": "object"
+          }
+        },
+        "type": "function"
+      },
+      {
+        "function": {
+          "description": "Look up the documented trigger, detection method, and business rationale for a finding code, from the exception taxonomy. Does NOT return a recommended action or a severity assessment.",
+          "name": "get_policy",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "finding_code": {
+                "title": "Finding Code",
+                "type": "string"
+              }
+            },
+            "required": [
+              "finding_code"
+            ],
+            "title": "PolicyQuery",
+            "type": "object"
+          }
+        },
+        "type": "function"
+      }
+    ]
+  },
+  "model_call": {
+    "cached_prompt_tokens": 1280,
+    "completion_tokens": 198,
+    "latency_ms": 6134.524959139526,
+    "prompt_name": "critic_round_2",
+    "prompt_tokens": 2475,
+    "reasoning_tokens": 46,
+    "requested_model": "grok-4.5",
+    "resolved_model": "grok-4.5",
+    "system_fingerprint": "fp_a39489019fa99b6e",
+    "timestamp": "2026-07-30T05:35:43.337595Z"
+  },
+  "tool_calls": []
+}

@@ -1,0 +1,45 @@
+{
+  "content": "{\"note\": \"Vendor Global Supply Chain Partners is not in the master, lists 1600 Pennsylvania Ave with no email or prior orders, and is billing $15,225 on a first invoice (GadgetX 8 requested, 5 in stock). Reject as unverified.\"}",
+  "fingerprint": {
+    "messages": [
+      {
+        "content": "# Scribe\n\nWrite a one-paragraph exception note for the AP clerk who will act on this invoice.\n\n## Register\n\nSpecific. Factual. No hedging. No \"based on the analysis\". No restating the finding list. It should read like a competent colleague's handoff note.\n\nModel:\n\n> *Line 3 requests 20 GadgetX; 5 in stock. Vendor has no prior orders. Recommend hold pending vendor confirmation.*\n\nNotes on the model:\n- Concrete numbers, not adjectives (\"20 GadgetX; 5 in stock\", not \"large quantity\").\n- One or two sentences.\n- Names the action the clerk should consider.\n- No mention of finding codes, severity levels, or system internals.\n\n## What you MUST NOT do\n\n- Restate the findings list.\n- Quote the Adjudicator's rationale.\n- Use words like \"critical\", \"flagged\", \"detected\", \"raised\". The clerk knows there is a finding; they need to know what to do next.\n- Use severity vocabulary (`HIGH`, `MEDIUM`, etc.).\n- Write more than three sentences.\n\n## Your output\n\n```\n{\n  \"note\": \"<one to three sentences, plain English>\"\n}\n```\n\n## The invoice, findings, and adjudicator decision\n\n### Invoice\n{\n  \"invoice_number\": \"INV-1005\",\n  \"invoice_number_raw\": \"INV-1005\",\n  \"vendor_name\": \"Global Supply Chain Partners\",\n  \"vendor_raw\": \"Global Supply Chain Partners\",\n  \"vendor_claims\": [],\n  \"vendor_address\": \"1600 Pennsylvania Ave, Washington, DC 20500\",\n  \"vendor_email\": null,\n  \"invoice_date\": \"2026-01-18\",\n  \"date_raw\": \"2026-01-18\",\n  \"due_date\": \"2026-03-18\",\n  \"due_date_raw\": \"2026-03-18\",\n  \"payment_terms\": \"Net 60\",\n  \"references\": [],\n  \"notes\": null,\n  \"line_items\": [\n    {\n      \"raw_item_name\": \"WidgetA\",\n      \"canonical_item\": \"WidgetA\",\n      \"quantity\": 14,\n      \"unit_price_usd\": \"250.0\",\n      \"unit_price_native\": \"250.0 USD\",\n      \"line_amount_usd\": null,\n      \"note\": null\n    },\n    {\n      \"raw_item_name\": \"GadgetX\",\n      \"canonical_item\": \"GadgetX\",\n      \"quantity\": 8,\n      \"unit_price_usd\": \"750.0\",\n      \"unit_price_native\": \"750.0 USD\",\n      \"line_amount_usd\": null,\n      \"note\": null\n    },\n    {\n      \"raw_item_name\": \"WidgetB\",\n      \"canonical_item\": \"WidgetB\",\n      \"quantity\": 10,\n      \"unit_price_usd\": \"500.0\",\n      \"unit_price_native\": \"500.0 USD\",\n      \"line_amount_usd\": null,\n      \"note\": null\n    }\n  ],\n  \"additional_charges\": [],\n  \"stated_subtotal_usd\": \"14500.0\",\n  \"stated_tax_usd\": \"725.0\",\n  \"stated_total_usd\": \"15225.0\",\n  \"currency\": \"USD\",\n  \"source_file\": \"data/invoices/invoice_1005.json\",\n  \"source_format\": \"json\",\n  \"corrections\": []\n}\n\n### Findings\n- IN-003 [HIGH] Aggregate demand for GadgetX is 8 units, exceeding standing stock of 5\n- VN-001 [HIGH] Vendor 'Global Supply Chain Partners' is not in the master\n- PO-001 [HIGH] Total $15225.0 exceeds the $10000 auto-approval threshold\n- FR-003 [MEDIUM] Suspicious vendor address matches curated list: '1600 pennsylvania'\n\n### Adjudicator decision\noutcome: REJECT\nrationale: The payee 'Global Supply Chain Partners' is wholly absent from the vendor master (VN-001), lists 1600 Pennsylvania Ave\u2014the White House\u2014as its business address (FR-003, a curated suspicious/forged-address hit with no innocent reading), provides no email or prior relationship, and is billing $15,225 on a first-time invoice that also exceeds the auto-approval threshold (PO-001) and overdraws GadgetX stock (IN-003). That combination is not a plausible new-supplier packet; it is sufficient to REJECT as unverified and suspicious rather than escalate for the same facts a clerk would re-see.\n",
+        "role": "user"
+      }
+    ],
+    "model": "grok-4.5",
+    "response_format": {
+      "json_schema": {
+        "name": "ScribeOutput",
+        "schema": {
+          "properties": {
+            "note": {
+              "title": "Note",
+              "type": "string"
+            }
+          },
+          "required": [
+            "note"
+          ],
+          "title": "ScribeOutput",
+          "type": "object"
+        }
+      },
+      "type": "json_schema"
+    },
+    "tools": null
+  },
+  "model_call": {
+    "cached_prompt_tokens": 128,
+    "completion_tokens": 58,
+    "latency_ms": 6626.110749784857,
+    "prompt_name": "scribe",
+    "prompt_tokens": 1294,
+    "reasoning_tokens": 349,
+    "requested_model": "grok-4.5",
+    "resolved_model": "grok-4.5",
+    "system_fingerprint": "fp_a39489019fa99b6e",
+    "timestamp": "2026-07-30T05:32:55.503191Z"
+  },
+  "tool_calls": []
+}

@@ -1,0 +1,45 @@
+{
+  "content": "{\"note\": \"Invoice total $15,000 exceeds the $10,000 auto-approval limit; confirm approval authority before processing. Line requests 20 GadgetX against 5 in stock\u2014verify receipt or backorder status with procurement. Due date is 2026-01-30 (same as invoice date) rather than Net 30; confirm correct terms with vendor.\"}",
+  "fingerprint": {
+    "messages": [
+      {
+        "content": "# Scribe\n\nWrite a one-paragraph exception note for the AP clerk who will act on this invoice.\n\n## Register\n\nSpecific. Factual. No hedging. No \"based on the analysis\". No restating the finding list. It should read like a competent colleague's handoff note.\n\nModel:\n\n> *Line 3 requests 20 GadgetX; 5 in stock. Vendor has no prior orders. Recommend hold pending vendor confirmation.*\n\nNotes on the model:\n- Concrete numbers, not adjectives (\"20 GadgetX; 5 in stock\", not \"large quantity\").\n- One or two sentences.\n- Names the action the clerk should consider.\n- No mention of finding codes, severity levels, or system internals.\n\n## What you MUST NOT do\n\n- Restate the findings list.\n- Quote the Adjudicator's rationale.\n- Use words like \"critical\", \"flagged\", \"detected\", \"raised\". The clerk knows there is a finding; they need to know what to do next.\n- Use severity vocabulary (`HIGH`, `MEDIUM`, etc.).\n- Write more than three sentences.\n\n## Your output\n\n```\n{\n  \"note\": \"<one to three sentences, plain English>\"\n}\n```\n\n## The invoice, findings, and adjudicator decision\n\n### Invoice\n{\n  \"invoice_number\": \"INV-1002\",\n  \"invoice_number_raw\": \"1002\",\n  \"vendor_name\": \"Gadgets Co.\",\n  \"vendor_raw\": \"Gadgets Co.\",\n  \"vendor_claims\": [],\n  \"vendor_address\": null,\n  \"vendor_email\": null,\n  \"invoice_date\": \"2026-01-30\",\n  \"date_raw\": \"Jan 30 2026\",\n  \"due_date\": \"2026-01-30\",\n  \"due_date_raw\": \"2026-01-30\",\n  \"payment_terms\": \"Net 30\",\n  \"references\": [],\n  \"notes\": null,\n  \"line_items\": [\n    {\n      \"raw_item_name\": \"GadgetX\",\n      \"canonical_item\": \"GadgetX\",\n      \"quantity\": 20,\n      \"unit_price_usd\": \"750.0\",\n      \"unit_price_native\": \"750.0 USD\",\n      \"line_amount_usd\": null,\n      \"note\": null\n    }\n  ],\n  \"additional_charges\": [],\n  \"stated_subtotal_usd\": null,\n  \"stated_tax_usd\": null,\n  \"stated_total_usd\": \"15000.0\",\n  \"currency\": \"USD\",\n  \"source_file\": \"/Users/maximiliandaneker/dev/ap-exception-router/data/invoices/invoice_1002.txt\",\n  \"source_format\": \"txt\",\n  \"corrections\": []\n}\n\n### Findings\n- IN-003 [HIGH] Aggregate demand for GadgetX is 20 units, exceeding standing stock of 5\n- TM-003 [HIGH] Due date 2026-01-30 is on or before invoice date 2026-01-30\n- TM-001 [MEDIUM] Due date 2026-01-30 is 30 days off from invoice_date + terms (2026-03-01), tolerance 2\n- PO-001 [HIGH] Total $15000.0 exceeds the $10000 auto-approval threshold\n\n### Adjudicator decision\noutcome: ESCALATE\nrationale: This invoice cannot be auto-approved and needs AP review. PO-001 flags a $15,000 total above the $10,000 threshold, so approval authority must be confirmed by a human\u2014that is an escalation gate, not grounds to reject a potentially legitimate charge. IN-003 shows quantity 20 of GadgetX against standing stock of only 5, which is a fulfillment problem (backorder, incoming stock, or quantity error) that AP must resolve with receiving/procurement before payment. TM-003 and TM-001 further show the due date is the same day as the invoice date and 30 days off from the stated Net 30 terms, so terms should be verified with the vendor. None of these findings establish fraud or an unpayable document on their face; a clerk should confirm approval authority, stock/receipt status, and correct due date.\n",
+        "role": "user"
+      }
+    ],
+    "model": "grok-4.5",
+    "response_format": {
+      "json_schema": {
+        "name": "ScribeOutput",
+        "schema": {
+          "properties": {
+            "note": {
+              "title": "Note",
+              "type": "string"
+            }
+          },
+          "required": [
+            "note"
+          ],
+          "title": "ScribeOutput",
+          "type": "object"
+        }
+      },
+      "type": "json_schema"
+    },
+    "tools": null
+  },
+  "model_call": {
+    "cached_prompt_tokens": 128,
+    "completion_tokens": 78,
+    "latency_ms": 8334.367458242923,
+    "prompt_name": "scribe",
+    "prompt_tokens": 1192,
+    "reasoning_tokens": 445,
+    "requested_model": "grok-4.5",
+    "resolved_model": "grok-4.5",
+    "system_fingerprint": "fp_a39489019fa99b6e",
+    "timestamp": "2026-07-30T05:08:54.846441Z"
+  },
+  "tool_calls": []
+}

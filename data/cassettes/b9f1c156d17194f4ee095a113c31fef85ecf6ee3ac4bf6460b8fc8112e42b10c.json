@@ -1,0 +1,45 @@
+{
+  "content": "{\n  \"note\": \"NoProd Industries is a first-time vendor not in the master (email billing@noproduct.biz unverifiable); invoice INV-1008 bills 12 SuperGizmo at $400 and 6 MegaSprocket at $850 for $9,900, both items absent from catalog. Hold payment and confirm whether NoProd is an intended new supplier\u2014if so, set up the vendor master and item records and verify the PO/goods before releasing funds.\"\n}",
+  "fingerprint": {
+    "messages": [
+      {
+        "content": "# Scribe\n\nWrite a one-paragraph exception note for the AP clerk who will act on this invoice.\n\n## Register\n\nSpecific. Factual. No hedging. No \"based on the analysis\". No restating the finding list. It should read like a competent colleague's handoff note.\n\nModel:\n\n> *Line 3 requests 20 GadgetX; 5 in stock. Vendor has no prior orders. Recommend hold pending vendor confirmation.*\n\nNotes on the model:\n- Concrete numbers, not adjectives (\"20 GadgetX; 5 in stock\", not \"large quantity\").\n- One or two sentences.\n- Names the action the clerk should consider.\n- No mention of finding codes, severity levels, or system internals.\n\n## What you MUST NOT do\n\n- Restate the findings list.\n- Quote the Adjudicator's rationale.\n- Use words like \"critical\", \"flagged\", \"detected\", \"raised\". The clerk knows there is a finding; they need to know what to do next.\n- Use severity vocabulary (`HIGH`, `MEDIUM`, etc.).\n- Write more than three sentences.\n\n## Your output\n\n```\n{\n  \"note\": \"<one to three sentences, plain English>\"\n}\n```\n\n## The invoice, findings, and adjudicator decision\n\n### Invoice\n{\n  \"invoice_number\": \"INV-1008\",\n  \"invoice_number_raw\": \"INV-1008\",\n  \"vendor_name\": \"NoProd Industries\",\n  \"vendor_raw\": \"NoProd Industries\",\n  \"vendor_claims\": [],\n  \"vendor_address\": null,\n  \"vendor_email\": \"billing@noproduct.biz\",\n  \"invoice_date\": \"2026-01-10\",\n  \"date_raw\": \"2026-01-10\",\n  \"due_date\": \"2026-01-20\",\n  \"due_date_raw\": \"2026-01-20\",\n  \"payment_terms\": null,\n  \"references\": [],\n  \"notes\": \"Please process at your earliest convenience.\",\n  \"line_items\": [\n    {\n      \"raw_item_name\": \"SuperGizmo\",\n      \"canonical_item\": null,\n      \"quantity\": 12,\n      \"unit_price_usd\": \"400.0\",\n      \"unit_price_native\": \"400.0 USD\",\n      \"line_amount_usd\": null,\n      \"note\": null\n    },\n    {\n      \"raw_item_name\": \"MegaSprocket\",\n      \"canonical_item\": null,\n      \"quantity\": 6,\n      \"unit_price_usd\": \"850.0\",\n      \"unit_price_native\": \"850.0 USD\",\n      \"line_amount_usd\": null,\n      \"note\": null\n    }\n  ],\n  \"additional_charges\": [],\n  \"stated_subtotal_usd\": null,\n  \"stated_tax_usd\": null,\n  \"stated_total_usd\": \"9900.0\",\n  \"currency\": \"USD\",\n  \"source_file\": \"data/invoices/invoice_1008.txt\",\n  \"source_format\": \"txt\",\n  \"corrections\": []\n}\n\n### Findings\n- IN-001 [HIGH] Unknown item: 'SuperGizmo' is not in the inventory catalog\n- IN-001 [HIGH] Unknown item: 'MegaSprocket' is not in the inventory catalog\n- PR-004 [LOW] No reference price available for unknown item 'SuperGizmo'\n- PR-004 [LOW] No reference price available for unknown item 'MegaSprocket'\n- VN-001 [HIGH] Vendor 'NoProd Industries' is not in the master\n- VN-003 [MEDIUM] Cannot verify email domain for unknown vendor: 'billing@noproduct.biz' claims 'NoProd Industries'\n- PO-002 [MEDIUM] Total $9900.0 sits within 5.00% below the $10000 threshold \u2014 potential structuring signature\n\n### Adjudicator decision\noutcome: ESCALATE\nrationale: This invoice is from first-time vendor NoProd Industries (VN-001), absent from the vendor master, with an unverifiable email domain (VN-003) and two non-catalog items SuperGizmo and MegaSprocket (dual IN-001; PR-004 follows). The $9,900 total is a clean 12\u00d7400 + 6\u00d7850 with no arithmetic defects, but sits just under the $10,000 approval threshold (PO-002). First-time payees and novel specialty goods are a valid onboarding path rather than automatic fraud\u2014there is no duplicate, spoof, or price-gouging signal\u2014so outright REJECT is too harsh and would wrongly burn a potential supplier relationship. Auto-APPROVE is also inappropriate given the complete lack of master/catalog anchors and the near-threshold pattern. AP should confirm whether NoProd is an intended new supplier, set up the vendor master and item records if legitimate, and verify the goods/PO before payment.\n",
+        "role": "user"
+      }
+    ],
+    "model": "grok-4.5",
+    "response_format": {
+      "json_schema": {
+        "name": "ScribeOutput",
+        "schema": {
+          "properties": {
+            "note": {
+              "title": "Note",
+              "type": "string"
+            }
+          },
+          "required": [
+            "note"
+          ],
+          "title": "ScribeOutput",
+          "type": "object"
+        }
+      },
+      "type": "json_schema"
+    },
+    "tools": null
+  },
+  "model_call": {
+    "cached_prompt_tokens": 128,
+    "completion_tokens": 103,
+    "latency_ms": 8855.319874826819,
+    "prompt_name": "scribe",
+    "prompt_tokens": 1343,
+    "reasoning_tokens": 313,
+    "requested_model": "grok-4.5",
+    "resolved_model": "grok-4.5",
+    "system_fingerprint": "fp_a39489019fa99b6e",
+    "timestamp": "2026-07-30T05:29:30.578933Z"
+  },
+  "tool_calls": []
+}

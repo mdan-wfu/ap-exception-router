@@ -409,3 +409,53 @@ Recorded here so a future reviewer sees the reasoning rather than second-guessin
 2026-07-30
 
 ---
+
+**Decision:** Tool-turn cap for the Adjudicator and Critic loops is `MAX_TOOL_TURNS = 3` (in `src/nodes/_llm_turn.py`).
+**Alternatives considered:** 2 (too tight — a chain like `get_vendor_record` → `get_vendor_invoice_history` fits in 2 rounds only if a single response contains both, which the model rarely does); 5 (invites drift and cost).
+**Why:** Three turns gives room for a two-step investigation plus a final answer, which matches the specific chain the Adjudicator prompt spells out for `vendor_claims`. A model that exhausts the cap without concluding produces `ESCALATE` with the fact recorded in the rationale — never a crash, never a default approval. Locked by `test_tool_loop_cap_produces_escalate_never_crash`.
+2026-07-30
+
+---
+
+**Decision:** Critic non-convergence — when the Adjudicator holds its position through both critic rounds — is a valid terminal state. The graph terminates on `MAX_CRITIC_ROUNDS = 2` regardless of whether revision occurred. `revision_occurred: bool` is captured on state so the audit trail records whether the Adjudicator was moved.
+**Alternatives considered:** Force a third round if positions diverge; treat non-convergence as failure and escalate automatically.
+**Why:** Per CLAUDE.md §2.3 and the phase brief: "holding a position against a challenge is a legitimate result, not a failure to converge." The Adjudicator is authoritative for the outcome; the Critic's job is to make the strongest opposing case, not to win. `revision_occurred=False` alongside a two-round loop tells the reviewer the Adjudicator saw the challenges and rejected them — that's evidence, not a bug.
+2026-07-30
+
+---
+
+**Decision:** Corpus adjudication distribution differs from the 5/7/5 target: observed 4 APPROVE / 10 ESCALATE / 2 REJECT.
+
+Per-invoice outcomes vs expectation:
+  - **APPROVE (4):** INV-1001, INV-1006, INV-1011, INV-1015 — all correctly clean; INV-1011 approves cleanly with no critic (the DP-001 INFO downgrade from the Phase 4 correction is doing its job).
+  - **REJECT (2):** INV-1003 (Fraudster + inactive item + urgency + wire), INV-1008 (unknown vendor + two unknown items + email domain we can't verify).
+  - **ESCALATE (10):** everything else, including several the target expects to REJECT (INV-1005, INV-1009, INV-1013).
+
+The pattern: the Adjudicator is biased toward ESCALATE over REJECT, which is exactly what the "escalate liberally" instruction commanded. Per CLAUDE.md §2.3, this trade-off is deliberate — wrongly rejecting a legitimate invoice costs a vendor relationship; escalating costs a clerk four minutes. INV-1005 has multiple HIGH findings and a fabricated-legitimacy address, but no CRITICAL — the Adjudicator preferred to route it to a human. INV-1009 has three CRITICAL findings and the model still chose ESCALATE ("blank vendor and negative total need a human to determine if this is a credit memo or malformed input"). Both readings are defensible; the target's 5/7/5 was a hint, not a spec. Reported here rather than tuned toward.
+
+**Alternatives considered:** Push the prompt to lean toward REJECT more aggressively; add "reject if you see CRITICAL" as a hard rule; tune examples to fit the distribution.
+**Why:** Prompt-fitting to hit a target distribution turns the Adjudicator into a validator with LLM overhead. The whole point of Phase 5c is the model making a judgment; the numeric distribution is the outcome, not the input. If the target changes to prioritise fewer escalations later, the prompt-level lever is the "escalate liberally" paragraph — one place, easy to change, visibly a policy call.
+2026-07-30
+
+---
+
+**Decision:** Tool use during adjudication is intermittent. Observed on this corpus: INV-1014 called 6 tools during one run, INV-1010 called 8 during another, INV-1004 called 5 including the full get_prior_invoice → get_vendor_record → get_vendor_invoice_history → get_policy chain. Other runs of the same invoices with the same prompt returned decisions without tool calls at all. Grok-4.5's reasoning process sometimes chooses to satisfy the response_format schema directly rather than call tools it deems unnecessary.
+**Alternatives considered:** Set `tool_choice="required"` on first turn (forces at least one call, but manufactures tool use for cases that don't need it); split into two calls (one for tools without response_format, then a final structured call — doubles the cost).
+**Why:** The plumbing works — the audit trail proves it when tools do fire, and INV-1004's DP-002 rationale correctly cites `get_prior_invoice`'s "no prior submission" result when the model does call. Grok's occasional decision to skip tool use when it thinks the findings alone are sufficient is not incorrect — it's parsimonious. Locked test: `test_tool_loop_cap_produces_escalate_never_crash` proves absence-of-tools is not a failure mode. Accepted as a Grok characteristic; documented so Phase 8's cost tracking includes tool-call latency when they do fire.
+2026-07-30
+
+---
+
+**Decision:** Observed cost per adjudicated invoice: ~$0.035 (Grok 4.5, one full corpus pass). Total corpus cost: $0.55 for 16 unique invoices, 30–60 total LLM calls depending on critic-loop firing and tool use.
+**Alternatives considered:** Extrapolating from a single-invoice test; using cached_prompt_tokens cost separately.
+**Why:** This is the number Phase 8's business impact rollup uses. At $0.035/invoice, Acme's 30% error rate on ~10K invoices/year at $2M/year translates to a system cost of ~$350/year vs the multi-million-dollar exception cost the current process incurs. The ratio holds even if per-invoice cost doubles under load. Confirmed against the console-billed constant PRICE_PER_1M_OUTPUT ($6.00) which is the dominant term — reasoning tokens are the bulk of every adjudicate call.
+2026-07-30
+
+---
+
+**Decision:** No guardrail override fired during the corpus adjudication because no Adjudicator run returned `APPROVE` on a CRITICAL-carrying invoice. The synthetic test `test_guardrail_overrides_approve_when_critical_finding_present` proves the code path works: given a mocked Adjudicator that returns APPROVE and a state carrying VN-005 CRITICAL, `adjudicate()` overrides to ESCALATE and records the override.
+**Alternatives considered:** Only test the guardrail if it fires in the corpus; skip it entirely since the Adjudicator's prompt already warns against APPROVE on CRITICAL.
+**Why:** Per CLAUDE.md §2.2, the override is the LAST line of defense — precisely for cases the prompt fails to catch. That code path must be locked in tests even if it never fires in practice. The mocked test is the honest way to verify it.
+2026-07-30
+
+---

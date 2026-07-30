@@ -121,12 +121,12 @@ Each is pure: `(Invoice, reference) -> list[Finding]`.
 ## Phase 5 — Graph and judgment agents
 - [x] `src/graph.py` — `StateGraph` assembled so it reads like the flow diagram (Phase 5a)
 - [x] `src/tools/` — five read-only lookup tools per `CLAUDE.md` §2.1a, registered as LangGraph tools with JSON schemas (Phase 5b)
-- [ ] `prompts/adjudicator.md` — receives invoice + findings + policy context, may call tools to investigate, returns decision + rationale. Computes nothing. (Phase 5c)
-- [ ] Tool calls captured in the run trace (name, arguments, result, latency) (Phase 5c)
-- [ ] `prompts/critic.md` — argues the opposite side (Phase 5c)
+- [x] `prompts/adjudicator.md` — receives invoice + findings + policy context, may call tools to investigate, returns decision + rationale. Computes nothing. (Phase 5c)
+- [x] Tool calls captured in the run trace (name, arguments, result, latency) (Phase 5c)
+- [x] `prompts/critic.md` — argues the opposite side (Phase 5c)
 - [x] Conditional critic edge: fires only when amount > threshold **or** any finding ≥ HIGH. Max 2 rounds. (Phase 5a)
-- [x] Hard guardrail in code: CRITICAL finding cannot resolve to `APPROVE` (Phase 4 predicate wired via `policy_gate` in 5a)
-- [ ] `prompts/scribe.md` — plain-English exception note for the human queue (Phase 5c)
+- [x] Hard guardrail in code: CRITICAL finding cannot resolve to `APPROVE` (Phase 4 predicate wired via `policy_gate` in 5a, enforced in adjudicate in 5c)
+- [x] `prompts/scribe.md` — plain-English exception note for the human queue (Phase 5c)
 
 **Exit:** all 16 invoices produce a decision with rationale.
 
@@ -217,3 +217,5 @@ Claude Code appends one line per session: date, phases touched, anything that su
 2026-07-30 — Phase 5a complete. Graph skeleton (StateGraph with SqliteSaver checkpointer), deterministic nodes (triage, validate, policy_gate, route_outcome placeholder), stubs (adjudicate, critique) with conditional edge on CRITIC_TRIGGER, batch pre-pass for duplicates. Zero API calls this phase. Collapsed triage+extract into a single triage node. 157 pass.
 
 2026-07-30 — Phase 5b complete. Five read-only tools registered in a single TOOLS list: get_vendor_record, get_vendor_invoice_history, get_item_reference, get_prior_invoice, get_policy. Extracted `score_candidates()` helper so validator (strict threshold 0.70) and tool (investigative threshold 0.30) share one SequenceMatcher implementation. Minimal SQLite AuditStore that Phase 6 will fill with RunRecord data. Zero API calls. 177 pass.
+
+2026-07-30 — Phase 5c complete. Adjudicator + Critic + Scribe wired with tool calling; §2.2 hard guardrail enforced in adjudicate code after the model returns. Full corpus adjudicated: 4 APPROVE / 10 ESCALATE / 2 REJECT vs the 5/7/5 target — the divergence is toward ESCALATE, consistent with the "escalate liberally" prompt instruction. Cost $0.55 total, ~$0.035/invoice. Total tests passing across the whole suite.

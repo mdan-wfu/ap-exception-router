@@ -1,0 +1,170 @@
+{
+  "content": "{\"challenge\":\"The FR-003 address hit on '1600 Pennsylvania Ave' is a curated known-bad/suspicious match with no innocent reading that clears itself from the packet alone, VN-001 confirms the payee is entirely unknown with no master record to lean on, and IN-003 plus PO-001 compound real operational and threshold breaches\u2014so the bundle is not auto-approvable. Equally, nothing in the invoice arithmetic, prior-submission state, or item references supplies a clean legitimacy path that would justify REJECT without a human check on whether this is a real new supplier vs. a spoof. The Adjudicator correctly held for escalation; a forced APPROVE or REJECT would invent certainty the evidence does not contain.\",\"proposed_outcome\":null,\"cites_finding_codes\":[\"FR-003\",\"VN-001\",\"IN-003\",\"PO-001\"]}",
+  "fingerprint": {
+    "messages": [
+      {
+        "content": "# Critic\n\nYou argue the opposite side of the Adjudicator's decision. You are NOT a second adjudicator, a quality scorer, or a tiebreaker. Your job is to strain-test the reasoning by making the strongest case against it.\n\n## What \"the opposite side\" means\n\n- Adjudicator said **APPROVE** \u2192 argue that this invoice should be rejected or escalated. What could be wrong that the Adjudicator dismissed?\n- Adjudicator said **REJECT** \u2192 argue that this invoice may in fact be legitimate. What innocent explanation would fit the same evidence?\n- Adjudicator said **ESCALATE** \u2192 argue that the case is actually decidable, in either direction, without human involvement. What information already in the packet resolves the question?\n\n## Ground your challenge\n\nA challenge grounded in a lookup beats a rhetorical one. You have the same five tools the Adjudicator had. If your argument depends on prior history, call `get_prior_invoice` or `get_vendor_invoice_history` and cite the result. If it depends on a named alternative vendor, call `get_vendor_record` and cite whom you're pointing to. Rhetorical challenges (\"but what if it's fraud?\") are worthless without a factual hook.\n\n## What you MUST NOT do\n\n- Repeat the Adjudicator's rationale back in different words.\n- Argue that the arithmetic or stock check might be wrong. Those are validator facts, same as they were for the Adjudicator.\n- Manufacture findings the validators did not produce.\n- Recommend an outcome. You challenge; the Adjudicator decides whether to revise or hold.\n\n## Your output\n\nReturn JSON matching this shape:\n\n```\n{\n  \"challenge\": \"<one short paragraph making the strongest opposing case, grounded in evidence or a tool result>\",\n  \"proposed_outcome\": \"APPROVE\" | \"REJECT\" | \"ESCALATE\" | null,\n  \"cites_finding_codes\": [\"...\", ...]\n}\n```\n\n`proposed_outcome` is what your argument would land on if pushed to a conclusion. `null` is valid when your challenge is \"this could stand either way \u2014 the Adjudicator should decide between two plausible readings, not commit.\"\n\n## The adjudicator's decision and the invoice context\n\n### Adjudicator decision\n{\n  \"outcome\": \"ESCALATE\",\n  \"rationale\": \"Multiple HIGH findings prevent auto-approval. Vendor 'Global Supply Chain Partners' is not in the master (VN-001), the invoice total of $15,225 exceeds the $10,000 threshold (PO-001), aggregate demand for GadgetX (8 units) exceeds standing stock of 5 (IN-003), and the vendor address matches a curated suspicious list ('1600 Pennsylvania Ave') (FR-003). A human should verify whether this is a legitimate new vendor, confirm stock/fulfillment capacity for GadgetX, and clear the address red flag before payment.\",\n  \"confidence\": 0.92\n}\n\n### Invoice\n{\n  \"invoice_number\": \"INV-1005\",\n  \"invoice_number_raw\": \"INV-1005\",\n  \"vendor_name\": \"Global Supply Chain Partners\",\n  \"vendor_raw\": \"Global Supply Chain Partners\",\n  \"vendor_claims\": [],\n  \"vendor_address\": \"1600 Pennsylvania Ave, Washington, DC 20500\",\n  \"vendor_email\": null,\n  \"invoice_date\": \"2026-01-18\",\n  \"date_raw\": \"2026-01-18\",\n  \"due_date\": \"2026-03-18\",\n  \"due_date_raw\": \"2026-03-18\",\n  \"payment_terms\": \"Net 60\",\n  \"references\": [],\n  \"notes\": null,\n  \"line_items\": [\n    {\n      \"raw_item_name\": \"WidgetA\",\n      \"canonical_item\": \"WidgetA\",\n      \"quantity\": 14,\n      \"unit_price_usd\": \"250.0\",\n      \"unit_price_native\": \"250.0 USD\",\n      \"line_amount_usd\": null,\n      \"note\": null\n    },\n    {\n      \"raw_item_name\": \"GadgetX\",\n      \"canonical_item\": \"GadgetX\",\n      \"quantity\": 8,\n      \"unit_price_usd\": \"750.0\",\n      \"unit_price_native\": \"750.0 USD\",\n      \"line_amount_usd\": null,\n      \"note\": null\n    },\n    {\n      \"raw_item_name\": \"WidgetB\",\n      \"canonical_item\": \"WidgetB\",\n      \"quantity\": 10,\n      \"unit_price_usd\": \"500.0\",\n      \"unit_price_native\": \"500.0 USD\",\n      \"line_amount_usd\": null,\n      \"note\": null\n    }\n  ],\n  \"additional_charges\": [],\n  \"stated_subtotal_usd\": \"14500.0\",\n  \"stated_tax_usd\": \"725.0\",\n  \"stated_total_usd\": \"15225.0\",\n  \"currency\": \"USD\",\n  \"source_file\": \"data/invoices/invoice_1005.json\",\n  \"source_format\": \"json\",\n  \"corrections\": []\n}\n\n### Findings\n- IN-003 [HIGH] Aggregate demand for GadgetX is 8 units, exceeding standing stock of 5\n- VN-001 [HIGH] Vendor 'Global Supply Chain Partners' is not in the master\n- PO-001 [HIGH] Total $15225.0 exceeds the $10000 auto-approval threshold\n- FR-003 [MEDIUM] Suspicious vendor address matches curated list: '1600 pennsylvania'\n",
+        "role": "user"
+      }
+    ],
+    "model": "grok-4.5",
+    "response_format": {
+      "json_schema": {
+        "name": "CriticOutput",
+        "schema": {
+          "properties": {
+            "challenge": {
+              "title": "Challenge",
+              "type": "string"
+            },
+            "cites_finding_codes": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Cites Finding Codes",
+              "type": "array"
+            },
+            "proposed_outcome": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Proposed Outcome"
+            }
+          },
+          "required": [
+            "challenge"
+          ],
+          "title": "CriticOutput",
+          "type": "object"
+        }
+      },
+      "type": "json_schema"
+    },
+    "tools": [
+      {
+        "function": {
+          "description": "Look up a vendor in the master. Returns the exact record if one exists, plus any fuzzy candidates with match scores and each candidate's status (active/inactive) and relationship_since date. The Adjudicator interprets these facts; the tool does not.",
+          "name": "get_vendor_record",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "title": "Name",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "title": "VendorRecordQuery",
+            "type": "object"
+          }
+        },
+        "type": "function"
+      },
+      {
+        "function": {
+          "description": "Prior invoices for this vendor from the audit store: count, total value in USD, first and last seen dates, and a count of prior outcomes by type. Zero on an empty store \u2014 a first-time payee is a valid answer, not an error.",
+          "name": "get_vendor_invoice_history",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "title": "Name",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "title": "VendorHistoryQuery",
+            "type": "object"
+          }
+        },
+        "type": "function"
+      },
+      {
+        "function": {
+          "description": "Look up an inventory item by name (canonicalized first). Returns stock, reference_unit_price, category, and active flag. Never fuzzy-matches items \u2014 an unknown item returns found=False.",
+          "name": "get_item_reference",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "item": {
+                "title": "Item",
+                "type": "string"
+              }
+            },
+            "required": [
+              "item"
+            ],
+            "title": "ItemQuery",
+            "type": "object"
+          }
+        },
+        "type": "function"
+      },
+      {
+        "function": {
+          "description": "Look up any prior submission of this invoice number in the audit store. Returns semantic_hash, stated total, source file, and prior outcome. Empty result on first submission \u2014 that is the meaningful answer for a new invoice.",
+          "name": "get_prior_invoice",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "invoice_number": {
+                "title": "Invoice Number",
+                "type": "string"
+              }
+            },
+            "required": [
+              "invoice_number"
+            ],
+            "title": "PriorInvoiceQuery",
+            "type": "object"
+          }
+        },
+        "type": "function"
+      },
+      {
+        "function": {
+          "description": "Look up the documented trigger, detection method, and business rationale for a finding code, from the exception taxonomy. Does NOT return a recommended action or a severity assessment.",
+          "name": "get_policy",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "finding_code": {
+                "title": "Finding Code",
+                "type": "string"
+              }
+            },
+            "required": [
+              "finding_code"
+            ],
+            "title": "PolicyQuery",
+            "type": "object"
+          }
+        },
+        "type": "function"
+      }
+    ]
+  },
+  "model_call": {
+    "cached_prompt_tokens": 1280,
+    "completion_tokens": 181,
+    "latency_ms": 6318.802666850388,
+    "prompt_name": "critic_round_1",
+    "prompt_tokens": 2070,
+    "reasoning_tokens": 44,
+    "requested_model": "grok-4.5",
+    "resolved_model": "grok-4.5",
+    "system_fingerprint": "fp_a39489019fa99b6e",
+    "timestamp": "2026-07-30T05:32:27.778799Z"
+  },
+  "tool_calls": []
+}

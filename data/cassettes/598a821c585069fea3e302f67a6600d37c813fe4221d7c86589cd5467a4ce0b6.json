@@ -1,0 +1,170 @@
+{
+  "content": "{\"challenge\":\"PO-001 alone forces escalation under current policy for any total above $10k; the remaining findings do not independently make the invoice undecidable. AR-004 is a clean $50 arithmetic overcharge (22512.8 vs 22562.8) with no supporting charge line\u2014an automatic reject condition, not a verify-with-vendor puzzle. The three IN-003 over-demand flags and the PR-003 dual prices are explained on the face of the invoice (volume discount / replacement / sample / expedited notes) and do not require human judgment once the $50 overcharge is treated as disqualifying. A consistent rule that rejects on unexplained AR-004 overcharge would decide this packet without escalation.\",\"proposed_outcome\":\"REJECT\",\"cites_finding_codes\":[\"AR-004\",\"PO-001\",\"IN-003\",\"PR-003\"]}",
+  "fingerprint": {
+    "messages": [
+      {
+        "content": "# Critic\n\nYou argue the opposite side of the Adjudicator's decision. You are NOT a second adjudicator, a quality scorer, or a tiebreaker. Your job is to strain-test the reasoning by making the strongest case against it.\n\n## What \"the opposite side\" means\n\n- Adjudicator said **APPROVE** \u2192 argue that this invoice should be rejected or escalated. What could be wrong that the Adjudicator dismissed?\n- Adjudicator said **REJECT** \u2192 argue that this invoice may in fact be legitimate. What innocent explanation would fit the same evidence?\n- Adjudicator said **ESCALATE** \u2192 argue that the case is actually decidable, in either direction, without human involvement. What information already in the packet resolves the question?\n\n## Ground your challenge\n\nA challenge grounded in a lookup beats a rhetorical one. You have the same five tools the Adjudicator had. If your argument depends on prior history, call `get_prior_invoice` or `get_vendor_invoice_history` and cite the result. If it depends on a named alternative vendor, call `get_vendor_record` and cite whom you're pointing to. Rhetorical challenges (\"but what if it's fraud?\") are worthless without a factual hook.\n\n## What you MUST NOT do\n\n- Repeat the Adjudicator's rationale back in different words.\n- Argue that the arithmetic or stock check might be wrong. Those are validator facts, same as they were for the Adjudicator.\n- Manufacture findings the validators did not produce.\n- Recommend an outcome. You challenge; the Adjudicator decides whether to revise or hold.\n\n## Your output\n\nReturn JSON matching this shape:\n\n```\n{\n  \"challenge\": \"<one short paragraph making the strongest opposing case, grounded in evidence or a tool result>\",\n  \"proposed_outcome\": \"APPROVE\" | \"REJECT\" | \"ESCALATE\" | null,\n  \"cites_finding_codes\": [\"...\", ...]\n}\n```\n\n`proposed_outcome` is what your argument would land on if pushed to a conclusion. `null` is valid when your challenge is \"this could stand either way \u2014 the Adjudicator should decide between two plausible readings, not commit.\"\n\n## The adjudicator's decision and the invoice context\n\n### Adjudicator decision\n{\n  \"outcome\": \"ESCALATE\",\n  \"rationale\": \"This invoice cannot auto-approve for several independent reasons. PO-001 flags the $22,562.80 total well above the $10,000 threshold, so a human must own the approval decision. AR-004 shows the stated total overstates subtotal + tax by $50.00, which needs confirmation before payment. Three IN-003 findings show aggregate demand exceeding standing stock for every line item (WidgetA 22 vs 15, WidgetB 18 vs 10, GadgetX 9 vs 5), so fulfillment or back-order status should be confirmed. PR-003 notes dual prices on WidgetA and WidgetB; the invoice labels those lines as volume discounts, which is a plausible innocent reading, but still worth a glance alongside the other issues. DP-001 is INFO only (same-content file de-duplication) and does not affect the decision. Resolve by: (1) verifying the $50 total discrepancy with the vendor, (2) confirming stock/fulfillment for the three over-demand items, and (3) obtaining the appropriate over-threshold approval.\",\n  \"confidence\": 0.92\n}\n\n### Invoice\n{\n  \"invoice_number\": \"INV-1013\",\n  \"invoice_number_raw\": \"INV-1013\",\n  \"vendor_name\": \"Atlas Industrial Supply\",\n  \"vendor_raw\": \"Atlas Industrial Supply\",\n  \"vendor_claims\": [],\n  \"vendor_address\": null,\n  \"vendor_email\": null,\n  \"invoice_date\": \"2026-01-24\",\n  \"date_raw\": \"2026-01-24\",\n  \"due_date\": \"2026-03-24\",\n  \"due_date_raw\": \"2026-03-24\",\n  \"payment_terms\": \"Net 60\",\n  \"references\": [],\n  \"notes\": null,\n  \"line_items\": [\n    {\n      \"raw_item_name\": \"WidgetA\",\n      \"canonical_item\": \"WidgetA\",\n      \"quantity\": 15,\n      \"unit_price_usd\": \"250.0\",\n      \"unit_price_native\": \"250.0 USD\",\n      \"line_amount_usd\": \"3750.0\",\n      \"note\": null\n    },\n    {\n      \"raw_item_name\": \"WidgetB\",\n      \"canonical_item\": \"WidgetB\",\n      \"quantity\": 10,\n      \"unit_price_usd\": \"500.0\",\n      \"unit_price_native\": \"500.0 USD\",\n      \"line_amount_usd\": \"5000.0\",\n      \"note\": null\n    },\n    {\n      \"raw_item_name\": \"GadgetX\",\n      \"canonical_item\": \"GadgetX\",\n      \"quantity\": 5,\n      \"unit_price_usd\": \"750.0\",\n      \"unit_price_native\": \"750.0 USD\",\n      \"line_amount_usd\": \"3750.0\",\n      \"note\": null\n    },\n    {\n      \"raw_item_name\": \"WidgetA\",\n      \"canonical_item\": \"WidgetA\",\n      \"quantity\": 5,\n      \"unit_price_usd\": \"240.0\",\n      \"unit_price_native\": \"240.0 USD\",\n      \"line_amount_usd\": \"1200.0\",\n      \"note\": \"Volume discount\"\n    },\n    {\n      \"raw_item_name\": \"WidgetB\",\n      \"canonical_item\": \"WidgetB\",\n      \"quantity\": 8,\n      \"unit_price_usd\": \"480.0\",\n      \"unit_price_native\": \"480.0 USD\",\n      \"line_amount_usd\": \"3840.0\",\n      \"note\": \"Volume discount\"\n    },\n    {\n      \"raw_item_name\": \"GadgetX\",\n      \"canonical_item\": \"GadgetX\",\n      \"quantity\": 3,\n      \"unit_price_usd\": \"750.0\",\n      \"unit_price_native\": \"750.0 USD\",\n      \"line_amount_usd\": \"2250.0\",\n      \"note\": \"Expedited\"\n    },\n    {\n      \"raw_item_name\": \"WidgetA\",\n      \"canonical_item\": \"WidgetA\",\n      \"quantity\": 2,\n      \"unit_price_usd\": \"250.0\",\n      \"unit_price_native\": \"250.0 USD\",\n      \"line_amount_usd\": \"500.0\",\n      \"note\": \"Replacement\"\n    },\n    {\n      \"raw_item_name\": \"GadgetX\",\n      \"canonical_item\": \"GadgetX\",\n      \"quantity\": 1,\n      \"unit_price_usd\": \"750.0\",\n      \"unit_price_native\": \"750.0 USD\",\n      \"line_amount_usd\": \"750.0\",\n      \"note\": \"Sample\"\n    }\n  ],\n  \"additional_charges\": [],\n  \"stated_subtotal_usd\": \"21040.0\",\n  \"stated_tax_usd\": \"1472.8\",\n  \"stated_total_usd\": \"22562.8\",\n  \"currency\": \"USD\",\n  \"source_file\": \"data/invoices/invoice_1013.pdf\",\n  \"source_format\": \"pdf\",\n  \"corrections\": []\n}\n\n### Findings\n- DP-001 [INFO] INV-1013: 2 files with matching semantic_hash \u2014 dropped; retained invoice_1013.json (most complete fields: stated_subtotal, stated_tax, payment_terms, vendor_address)\n- AR-004 [HIGH] Stated total $22562.8 does not equal subtotal ($21040.0) + tax ($1472.8) + extras ($0) = $22512.8 \u2014 overcharge of $50.0\n- IN-003 [HIGH] Aggregate demand for WidgetA is 22 units, exceeding standing stock of 15\n- IN-003 [HIGH] Aggregate demand for WidgetB is 18 units, exceeding standing stock of 10\n- IN-003 [HIGH] Aggregate demand for GadgetX is 9 units, exceeding standing stock of 5\n- PR-003 [MEDIUM] WidgetA appears at multiple prices within the invoice: $240.0, $250.0\n- PR-003 [MEDIUM] WidgetB appears at multiple prices within the invoice: $480.0, $500.0\n- PO-001 [HIGH] Total $22562.8 exceeds the $10000 auto-approval threshold\n",
+        "role": "user"
+      }
+    ],
+    "model": "grok-4.5",
+    "response_format": {
+      "json_schema": {
+        "name": "CriticOutput",
+        "schema": {
+          "properties": {
+            "challenge": {
+              "title": "Challenge",
+              "type": "string"
+            },
+            "cites_finding_codes": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Cites Finding Codes",
+              "type": "array"
+            },
+            "proposed_outcome": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Proposed Outcome"
+            }
+          },
+          "required": [
+            "challenge"
+          ],
+          "title": "CriticOutput",
+          "type": "object"
+        }
+      },
+      "type": "json_schema"
+    },
+    "tools": [
+      {
+        "function": {
+          "description": "Look up a vendor in the master. Returns the exact record if one exists, plus any fuzzy candidates with match scores and each candidate's status (active/inactive) and relationship_since date. The Adjudicator interprets these facts; the tool does not.",
+          "name": "get_vendor_record",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "title": "Name",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "title": "VendorRecordQuery",
+            "type": "object"
+          }
+        },
+        "type": "function"
+      },
+      {
+        "function": {
+          "description": "Prior invoices for this vendor from the audit store: count, total value in USD, first and last seen dates, and a count of prior outcomes by type. Zero on an empty store \u2014 a first-time payee is a valid answer, not an error.",
+          "name": "get_vendor_invoice_history",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "title": "Name",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "title": "VendorHistoryQuery",
+            "type": "object"
+          }
+        },
+        "type": "function"
+      },
+      {
+        "function": {
+          "description": "Look up an inventory item by name (canonicalized first). Returns stock, reference_unit_price, category, and active flag. Never fuzzy-matches items \u2014 an unknown item returns found=False.",
+          "name": "get_item_reference",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "item": {
+                "title": "Item",
+                "type": "string"
+              }
+            },
+            "required": [
+              "item"
+            ],
+            "title": "ItemQuery",
+            "type": "object"
+          }
+        },
+        "type": "function"
+      },
+      {
+        "function": {
+          "description": "Look up any prior submission of this invoice number in the audit store. Returns semantic_hash, stated total, source file, and prior outcome. Empty result on first submission \u2014 that is the meaningful answer for a new invoice.",
+          "name": "get_prior_invoice",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "invoice_number": {
+                "title": "Invoice Number",
+                "type": "string"
+              }
+            },
+            "required": [
+              "invoice_number"
+            ],
+            "title": "PriorInvoiceQuery",
+            "type": "object"
+          }
+        },
+        "type": "function"
+      },
+      {
+        "function": {
+          "description": "Look up the documented trigger, detection method, and business rationale for a finding code, from the exception taxonomy. Does NOT return a recommended action or a severity assessment.",
+          "name": "get_policy",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "finding_code": {
+                "title": "Finding Code",
+                "type": "string"
+              }
+            },
+            "required": [
+              "finding_code"
+            ],
+            "title": "PolicyQuery",
+            "type": "object"
+          }
+        },
+        "type": "function"
+      }
+    ]
+  },
+  "model_call": {
+    "cached_prompt_tokens": 128,
+    "completion_tokens": 184,
+    "latency_ms": 4949.142666999251,
+    "prompt_name": "critic_round_1",
+    "prompt_tokens": 2787,
+    "reasoning_tokens": 44,
+    "requested_model": "grok-4.5",
+    "resolved_model": "grok-4.5",
+    "system_fingerprint": "fp_a39489019fa99b6e",
+    "timestamp": "2026-07-30T05:36:38.282991Z"
+  },
+  "tool_calls": []
+}

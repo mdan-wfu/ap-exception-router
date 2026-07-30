@@ -1,0 +1,45 @@
+{
+  "content": "{\n  \"note\": \"Vendor name is blank with no address, email, or references, so there is no counterparty to credit. WidgetA shows quantity -5 and the total is -$250 (credit-memo shape), but it cannot be applied without an identified vendor\u2014reject and request resubmission with vendor identity.\"\n}",
+  "fingerprint": {
+    "messages": [
+      {
+        "content": "# Scribe\n\nWrite a one-paragraph exception note for the AP clerk who will act on this invoice.\n\n## Register\n\nSpecific. Factual. No hedging. No \"based on the analysis\". No restating the finding list. It should read like a competent colleague's handoff note.\n\nModel:\n\n> *Line 3 requests 20 GadgetX; 5 in stock. Vendor has no prior orders. Recommend hold pending vendor confirmation.*\n\nNotes on the model:\n- Concrete numbers, not adjectives (\"20 GadgetX; 5 in stock\", not \"large quantity\").\n- One or two sentences.\n- Names the action the clerk should consider.\n- No mention of finding codes, severity levels, or system internals.\n\n## What you MUST NOT do\n\n- Restate the findings list.\n- Quote the Adjudicator's rationale.\n- Use words like \"critical\", \"flagged\", \"detected\", \"raised\". The clerk knows there is a finding; they need to know what to do next.\n- Use severity vocabulary (`HIGH`, `MEDIUM`, etc.).\n- Write more than three sentences.\n\n## Your output\n\n```\n{\n  \"note\": \"<one to three sentences, plain English>\"\n}\n```\n\n## The invoice, findings, and adjudicator decision\n\n### Invoice\n{\n  \"invoice_number\": \"INV-1009\",\n  \"invoice_number_raw\": \"INV-1009\",\n  \"vendor_name\": \"\",\n  \"vendor_raw\": \"\",\n  \"vendor_claims\": [],\n  \"vendor_address\": null,\n  \"vendor_email\": null,\n  \"invoice_date\": \"2026-01-15\",\n  \"date_raw\": \"2026-01-15\",\n  \"due_date\": null,\n  \"due_date_raw\": null,\n  \"payment_terms\": \"\",\n  \"references\": [],\n  \"notes\": null,\n  \"line_items\": [\n    {\n      \"raw_item_name\": \"WidgetA\",\n      \"canonical_item\": \"WidgetA\",\n      \"quantity\": -5,\n      \"unit_price_usd\": \"250.0\",\n      \"unit_price_native\": \"250.0 USD\",\n      \"line_amount_usd\": null,\n      \"note\": null\n    },\n    {\n      \"raw_item_name\": \"WidgetB\",\n      \"canonical_item\": \"WidgetB\",\n      \"quantity\": 2,\n      \"unit_price_usd\": \"500.0\",\n      \"unit_price_native\": \"500.0 USD\",\n      \"line_amount_usd\": null,\n      \"note\": null\n    }\n  ],\n  \"additional_charges\": [],\n  \"stated_subtotal_usd\": \"1000.0\",\n  \"stated_tax_usd\": \"0.0\",\n  \"stated_total_usd\": \"-250.0\",\n  \"currency\": \"USD\",\n  \"source_file\": \"/Users/maximiliandaneker/dev/ap-exception-router/data/invoices/invoice_1009.json\",\n  \"source_format\": \"json\",\n  \"corrections\": []\n}\n\n### Findings\n- AR-002 [HIGH] Stated subtotal $1000.0 does not equal the sum of line amounts ($-250.0)\n- AR-004 [HIGH] Stated total $-250.0 does not equal subtotal ($1000.0) + tax ($0.0) + extras ($0) = $1000.0 \u2014 undercharge of $1250.0\n- AR-005 [CRITICAL] Line 0 (WidgetA): negative quantity -5\n- AR-006 [CRITICAL] Stated total is negative: $-250.0\n- VN-005 [CRITICAL] Vendor name is empty\n\n### Adjudicator decision\noutcome: REJECT\nrationale: This document cannot be posted or paid. VN-005 is decisive: vendor_name and vendor_raw are both empty, with no address, email, or references, so there is no identifiable counterparty to credit or pay. AR-005 (negative quantity on WidgetA) and AR-006 (negative stated total of -$250) are consistent with a credit-memo shape, and the line math (-5 \u00d7 $250 + 2 \u00d7 $500 = -$250) matches the stated total, which explains AR-002/AR-004 as artifacts of treating a credit as a positive invoice\u2014but a coherent credit still requires a known vendor to apply against. Without any issuer identity, there is nothing for AP to research or attach; the correct action is REJECT and request resubmission with vendor identity. CRITICAL findings (AR-005, AR-006, VN-005) also bar auto-approval.\n",
+        "role": "user"
+      }
+    ],
+    "model": "grok-4.5",
+    "response_format": {
+      "json_schema": {
+        "name": "ScribeOutput",
+        "schema": {
+          "properties": {
+            "note": {
+              "title": "Note",
+              "type": "string"
+            }
+          },
+          "required": [
+            "note"
+          ],
+          "title": "ScribeOutput",
+          "type": "object"
+        }
+      },
+      "type": "json_schema"
+    },
+    "tools": null
+  },
+  "model_call": {
+    "cached_prompt_tokens": 128,
+    "completion_tokens": 68,
+    "latency_ms": 5137.870917096734,
+    "prompt_name": "scribe",
+    "prompt_tokens": 1279,
+    "reasoning_tokens": 271,
+    "requested_model": "grok-4.5",
+    "resolved_model": "grok-4.5",
+    "system_fingerprint": "fp_a39489019fa99b6e",
+    "timestamp": "2026-07-30T05:01:16.270481Z"
+  },
+  "tool_calls": []
+}
