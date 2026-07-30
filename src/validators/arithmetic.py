@@ -101,17 +101,22 @@ def _grand_total(invoice: Invoice) -> list[Finding]:
         start=Decimal("0"),
     )
     expected = subtotal + tax + extras
-    diff = abs(invoice.stated_total.amount_usd - expected)
-    if diff > _CENT:
+    # Signed delta: stated - expected. Positive => overcharge (financial loss,
+    # fraud-adjacent). Negative => undercharge (reliability defect, downstream
+    # reconciliation problem). Both warrant AR-004, but the Adjudicator needs
+    # the sign to reason about direction.
+    signed_delta = invoice.stated_total.amount_usd - expected
+    if abs(signed_delta) > _CENT:
+        direction = "overcharge" if signed_delta > 0 else "undercharge"
         return [Finding(
             code="AR-004",
             severity=Severity.HIGH,
             message=(
                 f"Stated total ${invoice.stated_total.amount_usd} does not equal "
                 f"subtotal (${subtotal}) + tax (${tax}) + extras (${extras}) "
-                f"= ${expected}"
+                f"= ${expected} — {direction} of ${abs(signed_delta)}"
             ),
-            evidence=f"diff=${diff}",
+            evidence=f"signed_delta={signed_delta} ({direction}), expected={expected}",
             field_path="stated_total",
         )]
     return []

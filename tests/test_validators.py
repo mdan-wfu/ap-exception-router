@@ -41,6 +41,20 @@ def test_ar_004_fires_on_inv_1013_grand_total_off_by_50(reference):
     ar_004 = [f for f in findings if f.code == "AR-004"]
     assert len(ar_004) == 1
     assert "50" in ar_004[0].evidence or "50" in ar_004[0].message
+    # +$50 overcharge (stated > expected) — Adjudicator must see the sign
+    assert "overcharge" in ar_004[0].message
+    assert "signed_delta=50" in ar_004[0].evidence
+
+
+def test_ar_004_records_undercharge_direction_on_inv_1007(reference):
+    """INV-1007 is the mirror case: subtotal + tax = 15635, stated 15525.
+    Signed delta is −$110 (undercharge). The direction is a different
+    business event from INV-1013's overcharge and must be captured."""
+    _, findings = _findings_for("invoice_1007.csv", reference)
+    ar_004 = [f for f in findings if f.code == "AR-004"]
+    assert len(ar_004) == 1
+    assert "undercharge" in ar_004[0].message
+    assert "signed_delta=-110" in ar_004[0].evidence
 
 
 def test_ar_002_fires_on_inv_1009_subtotal_mismatch(reference):
