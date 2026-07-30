@@ -120,7 +120,7 @@ Each is pure: `(Invoice, reference) -> list[Finding]`.
 
 ## Phase 5 — Graph and judgment agents
 - [x] `src/graph.py` — `StateGraph` assembled so it reads like the flow diagram (Phase 5a)
-- [ ] `src/tools/` — five read-only lookup tools per `CLAUDE.md` §2.1a, registered as LangGraph tools with JSON schemas (Phase 5b)
+- [x] `src/tools/` — five read-only lookup tools per `CLAUDE.md` §2.1a, registered as LangGraph tools with JSON schemas (Phase 5b)
 - [ ] `prompts/adjudicator.md` — receives invoice + findings + policy context, may call tools to investigate, returns decision + rationale. Computes nothing. (Phase 5c)
 - [ ] Tool calls captured in the run trace (name, arguments, result, latency) (Phase 5c)
 - [ ] `prompts/critic.md` — argues the opposite side (Phase 5c)
@@ -215,3 +215,5 @@ Claude Code appends one line per session: date, phases touched, anything that su
 2026-07-29 — Phase 4 complete. All 8 validators + registry + guardrail predicate. Findings match CLAUDE.md §6 with one discovery: INV-1007 has an undocumented $110 grand-total arithmetic error (14750 subtotal + 885 tax = 15635, stated total 15525). Every invoice produces expected findings; INV-1006 remains clean (fuzzy VN-002 does not false-positive on Acme Industrial); INV-1010's $150 shipping correctly does NOT trip AR-004. 145 pass.
 
 2026-07-30 — Phase 5a complete. Graph skeleton (StateGraph with SqliteSaver checkpointer), deterministic nodes (triage, validate, policy_gate, route_outcome placeholder), stubs (adjudicate, critique) with conditional edge on CRITIC_TRIGGER, batch pre-pass for duplicates. Zero API calls this phase. Collapsed triage+extract into a single triage node. 157 pass.
+
+2026-07-30 — Phase 5b complete. Five read-only tools registered in a single TOOLS list: get_vendor_record, get_vendor_invoice_history, get_item_reference, get_prior_invoice, get_policy. Extracted `score_candidates()` helper so validator (strict threshold 0.70) and tool (investigative threshold 0.30) share one SequenceMatcher implementation. Minimal SQLite AuditStore that Phase 6 will fill with RunRecord data. Zero API calls. 177 pass.

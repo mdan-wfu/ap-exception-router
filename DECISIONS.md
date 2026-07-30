@@ -371,3 +371,32 @@ All other 17 files reconcile exactly on both the line-sum-vs-stated-subtotal ste
 2026-07-30
 
 ---
+
+**Decision:** Extracted `score_candidates(name, reference, min_score, top_n)` in `src/validators/vendor.py`. The validator calls it with the strict `FUZZY_THRESHOLD=0.70`; the tool `get_vendor_record` calls it with an investigative `TOOL_FUZZY_THRESHOLD=0.30` and `top_n=5`.
+**Alternatives considered:** Second SequenceMatcher wrapper in `src/tools/`; single shared threshold at either extreme.
+**Why:** CLAUDE.md §2.1a mandates one scoring implementation — "Reuse the fuzzy matcher from validators/vendor.py; do not write a second implementation." But the thresholds serve different purposes. The validator's job is to fire VN-002 only when the pair is truly close (a rename, a typo). The tool's job is to surface neighborhood context for the Adjudicator to weigh. `QuickShip Distributers` vs `FastShip Ltd.` scores 0.34 — below the validator threshold, above the tool threshold. Same matcher, different call sites, different jobs.
+2026-07-30
+
+---
+
+**Decision:** Tools return well-formed "not found" results on missing vendors, items, invoice numbers, or policy codes. They never raise for absence.
+**Alternatives considered:** Raise a typed `NotFoundError`; return `None`.
+**Why:** Per CLAUDE.md §2.1a, a tool call inside an agent turn that raises aborts the model's reasoning mid-conversation. A clean not-found lets the model incorporate the absence as evidence — which is frequently the point. INV-1008's vendor being absent from the master IS the finding. Genuine infrastructure failures (DB corruption, missing table) do raise, so an "unreachable audit store" is not silently swallowed.
+2026-07-30
+
+---
+
+**Decision:** `get_policy` does NOT return the finding's severity, only its trigger, detection method, rationale, and corpus examples. Severity is returned OMITTED even though the taxonomy documents it.
+**Alternatives considered:** Include severity for parity with the taxonomy row.
+**Why:** Severity is a documented judgment about how bad a finding class is. The Finding object itself carries its severity to the Adjudicator — the tool doesn't need to re-assert it. Returning severity here would blur the fact/judgment boundary: the tool's job is to explain what a code MEANS, not how bad it is. The Adjudicator forms its own opinion of what to do with a HIGH finding based on the specific evidence.
+2026-07-30
+
+---
+
+**Decision:** The fact/judgment line was mildly ambiguous in two places, resolved as follows:
+  1. `VendorMasterRow.status: "active" | "inactive"` — kept. `status` is factual master data, not a trustworthiness verdict. `inactive` in the seed data is the DB's ground truth, not the tool's opinion.
+  2. `VendorHistoryResult.prior_outcomes: dict[str, int]` — kept. Historical outcomes ARE facts (they're what previously happened). The tool reports what the audit store contains; it does not recommend that the current invoice should share the same outcome.
+Recorded here so a future reviewer sees the reasoning rather than second-guessing.
+2026-07-30
+
+---
