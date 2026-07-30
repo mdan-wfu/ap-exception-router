@@ -1,0 +1,197 @@
+"""Adjudicator node.
+
+Loads prompts/adjudicator.md, calls the provider with the tool schemas
+enabled, records every ModelCall and ToolCall into state. Applies the
+CLAUDE.md §2.2 hard guardrail in code AFTER the model returns — an
+Adjudicator that returns APPROVE on an invoice carrying a CRITICAL
+finding is overridden to ESCALATE, and the override itself is recorded
+so history is preserved.
+"""
+from __future__ import annotations
+
+import json
+from pathlib import Path
+
+from pydantic import BaseModel, Field
+
+from src.graph_state import GraphState
+from src.nodes._llm_turn import MAX_TOOL_TURNS, run_llm_with_tools
+from src.schema import Decision, Invoice, Outcome
+from src.validators import has_critical
+
+PROMPT_PATH = Path(__file__).resolve().parents[2] / "prompts" / "adjudicator.md"
+_PROMPT: str | None = None
+
+
+class AdjudicatorOutput(BaseModel):
+    outcome: str
+    rationale: str
+    confidence: float
+    finding_codes_referenced: list[str] = Field(default_factory=list)
+
+
+def _load_prompt() -> str:
+    global _PROMPT
+    if _PROMPT is None:
+        _PROMPT = PROMPT_PATH.read_text()
+    return _PROMPT
+
+
+def adjudicate(state: GraphState) -> dict:
+    invoice: Invoice = state["invoice"]
+    findings = state.get("findings", [])
+    critic_challenges = state.get("critic_challenges", [])
+
+    context = _build_context(invoice, findings, critic_challenges)
+    prompt = _load_prompt().replace("<<CONTEXT>>", context)
+
+    is_revision = len(critic_challenges) > 0
+    prompt_name = "adjudicator_revised" if is_revision else "adjudicator"
+
+    turn_result = run_llm_with_tools(
+        prompt, AdjudicatorOutput, prompt_name=prompt_name,
+    )
+
+    model_output = turn_result.parsed
+    if model_output is None:
+        decision = Decision(
+            outcome=Outcome.ESCALATE,
+            rationale=(
+                f"Tool loop cap ({MAX_TOOL_TURNS}) reached without a structured "
+                f"decision. Escalating to human review."
+            ),
+            confidence=0.3,
+        )
+    else:
+        try:
+            outcome = Outcome(model_output.outcome)
+        except ValueError:
+            outcome = Outcome.ESCALATE
+        decision = Decision(
+            outcome=outcome,
+            rationale=model_output.rationale,
+            confidence=model_output.confidence,
+        )
+
+    # Detect revision: on the second+ adjudicate call, compare against prior decision.
+    revised = False
+    if is_revision:
+        prior = state.get("decision")
+        if prior is not None and prior.outcome != decision.outcome:
+            revised = True
+        decision = decision.model_copy(update={
+            "critic_challenge": critic_challenges[-1],
+            "revised": revised,
+        })
+
+    # §2.2 hard guardrail — applied AFTER the model returns
+    override_fired = False
+    override_reason: str | None = None
+    if decision.outcome == Outcome.APPROVE and has_critical(findings):
+        override_fired = True
+        override_reason = (
+            "§2.2 guardrail: CRITICAL finding present; Adjudicator returned "
+            "APPROVE and has been overridden to ESCALATE. Original rationale: "
+            + decision.rationale
+        )
+        decision = decision.model_copy(update={
+            "outcome": Outcome.ESCALATE,
+            "rationale": override_reason,
+        })
+
+    return {
+        "decision": decision,
+        "model_calls": turn_result.model_calls,
+        "tool_calls": turn_result.tool_calls,
+        "revision_occurred": state.get("revision_occurred", False) or revised,
+        "guardrail_override_fired": override_fired,
+        "guardrail_override_reason": override_reason,
+        "nodes_fired": ["adjudicate"],
+    }
+
+
+def _build_context(invoice: Invoice, findings, critic_challenges: list[str]) -> str:
+    lines = []
+    lines.append("### Invoice")
+    inv_dict = _invoice_summary(invoice)
+    lines.append(json.dumps(inv_dict, indent=2, default=str))
+    lines.append("")
+    lines.append("### Findings")
+    if not findings:
+        lines.append("(none)")
+    else:
+        for f in findings:
+            lines.append(
+                f"- {f.code} [{f.severity.value}] {f.message}"
+                + (f"  (evidence: {f.evidence})" if f.evidence else "")
+                + (f"  (at {f.field_path})" if f.field_path else "")
+            )
+    if critic_challenges:
+        lines.append("")
+        lines.append("### Prior critic challenges")
+        for i, c in enumerate(critic_challenges, start=1):
+            lines.append(f"Round {i}: {c}")
+    return "\n".join(lines)
+
+
+def _invoice_summary(invoice: Invoice) -> dict:
+    """Compact JSON view — only fields the Adjudicator needs."""
+    return {
+        "invoice_number": invoice.invoice_number,
+        "invoice_number_raw": invoice.invoice_number_raw,
+        "vendor_name": invoice.vendor_name,
+        "vendor_raw": invoice.vendor_raw,
+        "vendor_claims": invoice.vendor_claims,
+        "vendor_address": invoice.vendor_address,
+        "vendor_email": invoice.vendor_email,
+        "invoice_date": invoice.invoice_date,
+        "date_raw": invoice.date_raw,
+        "due_date": invoice.due_date,
+        "due_date_raw": invoice.due_date_raw,
+        "payment_terms": invoice.payment_terms,
+        "references": invoice.references,
+        "notes": invoice.notes,
+        "line_items": [
+            {
+                "raw_item_name": li.raw_item_name,
+                "canonical_item": li.canonical_item,
+                "quantity": li.quantity,
+                "unit_price_usd": str(li.unit_price.amount_usd),
+                "unit_price_native": (
+                    f"{li.unit_price.amount_native} {li.unit_price.currency}"
+                ),
+                "line_amount_usd": (
+                    str(li.line_amount.amount_usd) if li.line_amount else None
+                ),
+                "note": li.note,
+            }
+            for li in invoice.line_items
+        ],
+        "additional_charges": [
+            {"label": ac.label, "amount_usd": str(ac.amount.amount_usd)}
+            for ac in invoice.additional_charges
+        ],
+        "stated_subtotal_usd": (
+            str(invoice.stated_subtotal.amount_usd) if invoice.stated_subtotal else None
+        ),
+        "stated_tax_usd": (
+            str(invoice.stated_tax.amount_usd) if invoice.stated_tax else None
+        ),
+        "stated_total_usd": (
+            str(invoice.stated_total.amount_usd) if invoice.stated_total else None
+        ),
+        "currency": (
+            invoice.stated_total.currency if invoice.stated_total else "USD"
+        ),
+        "source_file": invoice.source_file,
+        "source_format": invoice.source_format,
+        "corrections": [
+            {
+                "field_path": c.field_path,
+                "original": c.original,
+                "corrected": c.corrected,
+                "reason": c.reason,
+            }
+            for c in invoice.corrections
+        ],
+    }

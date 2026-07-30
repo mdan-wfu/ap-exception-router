@@ -1,32 +1,24 @@
-"""Terminal node: derive a placeholder outcome from findings so the graph
-runs end to end. Phase 5c's Adjudicator replaces this decision entirely —
-this stub exists only to give the graph a terminal state during 5a/5b.
+"""Terminal node: freeze the Adjudicator's decision as terminal_status.
+
+The Adjudicator (adjudicate.py) is authoritative for outcome. This node
+just publishes it to terminal_status so callers can read the final state
+without dereferencing the Decision object.
 """
 from __future__ import annotations
 
 from src.graph_state import GraphState
-from src.schema import Decision, Outcome, Severity
+from src.schema import Outcome
 
 
 def route_outcome(state: GraphState) -> dict:
-    findings = state.get("findings", [])
-    if state.get("has_critical"):
-        outcome = Outcome.REJECT
-        rationale = "placeholder: CRITICAL finding present"
-    elif any(f.severity in (Severity.HIGH, Severity.MEDIUM) for f in findings):
-        outcome = Outcome.ESCALATE
-        rationale = "placeholder: HIGH/MEDIUM findings present"
-    else:
-        outcome = Outcome.APPROVE
-        rationale = "placeholder: no substantive findings"
-
-    decision = Decision(
-        outcome=outcome,
-        rationale=rationale,
-        confidence=0.0,   # placeholder — Adjudicator will report real confidence
-    )
+    decision = state.get("decision")
+    if decision is None:
+        return {
+            "terminal_status": Outcome.FAILED,
+            "failure_reason": "no Adjudicator decision available",
+            "nodes_fired": ["route_outcome"],
+        }
     return {
-        "decision": decision,
-        "terminal_status": outcome,
+        "terminal_status": decision.outcome,
         "nodes_fired": ["route_outcome"],
     }

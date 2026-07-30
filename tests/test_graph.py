@@ -39,10 +39,10 @@ def test_graph_compiles(graph) -> None:
 
 def test_single_invoice_traverses_expected_nodes(graph) -> None:
     """A clean invoice: triage -> validate -> policy_gate -> adjudicate ->
-    route_outcome (no critic)."""
+    route_outcome (no critic, no scribe, APPROVE)."""
     state = _invoke(graph, "data/invoices/invoice_1001.txt")
     assert state.get("nodes_fired") == [
-        "triage", "validate", "policy_gate", "adjudicate:STUB", "route_outcome",
+        "triage", "validate", "policy_gate", "adjudicate", "route_outcome",
     ]
 
 
@@ -63,6 +63,9 @@ def test_critic_fires_for_inv_1013_over_threshold(graph) -> None:
     critic_count = sum(1 for n in state.get("nodes_fired", []) if n.startswith("critique"))
     assert critic_count == 2, f"expected 2 critic rounds, got {critic_count}"
     assert state.get("critic_rounds") == 2
+    # Adjudicator ran 3 times: initial + 2 revisions after critique
+    adj_count = sum(1 for n in state.get("nodes_fired", []) if n == "adjudicate")
+    assert adj_count == 3
 
 
 def test_critic_does_not_fire_for_inv_1001_clean(graph) -> None:

@@ -16,7 +16,7 @@ from __future__ import annotations
 import operator
 from typing import Annotated, TypedDict
 
-from src.schema import Decision, Finding, Invoice, Outcome
+from src.schema import Decision, Finding, Invoice, ModelCall, Outcome, ToolCall
 
 
 class GraphState(TypedDict, total=False):
@@ -38,9 +38,19 @@ class GraphState(TypedDict, total=False):
     # Adjudicator / critic tracking
     decision: Decision | None
     critic_rounds: int
+    critic_challenges: Annotated[list[str], operator.add]
+    revision_occurred: bool
+    guardrail_override_fired: bool
+    guardrail_override_reason: str | None
+
+    # Scribe output — the human-facing note (None on APPROVE)
+    scribe_note: str | None
 
     # Trace — one entry per node in the order they fired
     nodes_fired: Annotated[list[str], operator.add]
+    # LLM + tool call traces accumulate across every node that uses them
+    model_calls: Annotated[list[ModelCall], operator.add]
+    tool_calls: Annotated[list[ToolCall], operator.add]
 
     # Terminal
     terminal_status: Outcome | None

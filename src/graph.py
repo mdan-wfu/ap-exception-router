@@ -5,12 +5,16 @@ it belongs in a node or a routing predicate — not in this file.
 
 Node sequence:
 
-    triage → validate → policy_gate → adjudicate → (critique?)+ → route_outcome
+    triage → validate → policy_gate → adjudicate →
+        route_after_adjudicate:
+            → critique → adjudicate  (up to MAX_CRITIC_ROUNDS)
+            → scribe (if ESCALATE / REJECT) → route_outcome → END
+            → route_outcome (if APPROVE) → END
 
-The `adjudicate` and `critique` nodes are Phase 5c stubs; graph structure
-is final. The conditional critic edge fires when the invoice exceeds the
-approval threshold OR any finding is HIGH+ (CLAUDE.md §4 CRITIC_TRIGGER),
-capped at MAX_CRITIC_ROUNDS.
+The critic conditional fires when CLAUDE.md §4 CRITIC_TRIGGER holds
+(stated_total > threshold OR any HIGH+ finding) and the rounds cap is
+not exhausted. The scribe runs only for ESCALATE / REJECT — APPROVE
+needs no human-facing note.
 """
 from __future__ import annotations
 
@@ -22,25 +26,37 @@ from langgraph.graph import END, START, StateGraph
 
 from src.config import APPROVAL_THRESHOLD_USD, MAX_CRITIC_ROUNDS
 from src.graph_state import GraphState
+from src.nodes.adjudicate import adjudicate
+from src.nodes.critique import critique
 from src.nodes.policy_gate import policy_gate
 from src.nodes.route_outcome import route_outcome
-from src.nodes.stubs import adjudicate, critique
+from src.nodes.scribe import scribe
 from src.nodes.triage import triage
 from src.nodes.validate import validate
-from src.schema import Severity
+from src.schema import Outcome, Severity
 
 
 _THRESHOLD = Decimal(str(APPROVAL_THRESHOLD_USD))
 
 
-def should_critique(state: GraphState) -> str:
-    """CLAUDE.md §4 CRITIC_TRIGGER: total > threshold OR any HIGH+ finding,
-    capped at MAX_CRITIC_ROUNDS."""
-    if state.get("critic_rounds", 0) >= MAX_CRITIC_ROUNDS:
-        return "route_outcome"
+def route_after_adjudicate(state: GraphState) -> str:
+    """CRITIC_TRIGGER: stated_total > threshold OR any HIGH+ finding.
+    Cap at MAX_CRITIC_ROUNDS. After the cap (or if no trigger), route to
+    the scribe when the outcome is ESCALATE / REJECT, otherwise straight
+    to route_outcome for APPROVE.
+    """
+    if state.get("critic_rounds", 0) < MAX_CRITIC_ROUNDS and _critic_trigger(state):
+        return "critique"
 
+    decision = state.get("decision")
+    if decision is not None and decision.outcome in (Outcome.ESCALATE, Outcome.REJECT):
+        return "scribe"
+    return "route_outcome"
+
+
+def _critic_trigger(state: GraphState) -> bool:
     invoice = state.get("invoice")
-    total_over = (
+    over = (
         invoice is not None
         and invoice.stated_total is not None
         and invoice.stated_total.amount_usd > _THRESHOLD
@@ -49,13 +65,10 @@ def should_critique(state: GraphState) -> str:
         f.severity in (Severity.HIGH, Severity.CRITICAL)
         for f in state.get("findings", [])
     )
-    return "critique" if (total_over or has_high) else "route_outcome"
+    return over or has_high
 
 
 def build_graph(checkpointer_path: Path | str | None = "runs/checkpoints.sqlite"):
-    """Build and compile the pipeline. Checkpointer is Phase 6's dependency
-    for the human-gate `interrupt()`; installed now so Phase 6 does not
-    retrofit it."""
     g = StateGraph(GraphState)
 
     g.add_node("triage", triage)
@@ -63,6 +76,7 @@ def build_graph(checkpointer_path: Path | str | None = "runs/checkpoints.sqlite"
     g.add_node("policy_gate", policy_gate)
     g.add_node("adjudicate", adjudicate)
     g.add_node("critique", critique)
+    g.add_node("scribe", scribe)
     g.add_node("route_outcome", route_outcome)
 
     g.add_edge(START, "triage")
@@ -72,14 +86,15 @@ def build_graph(checkpointer_path: Path | str | None = "runs/checkpoints.sqlite"
 
     g.add_conditional_edges(
         "adjudicate",
-        should_critique,
-        {"critique": "critique", "route_outcome": "route_outcome"},
+        route_after_adjudicate,
+        {
+            "critique": "critique",
+            "scribe": "scribe",
+            "route_outcome": "route_outcome",
+        },
     )
-    # After a critique round, re-enter adjudicate (Phase 5c will use the
-    # critic's challenge to revise). The `should_critique` cap on
-    # MAX_CRITIC_ROUNDS prevents infinite loops.
     g.add_edge("critique", "adjudicate")
-
+    g.add_edge("scribe", "route_outcome")
     g.add_edge("route_outcome", END)
 
     if checkpointer_path is None:
@@ -87,22 +102,21 @@ def build_graph(checkpointer_path: Path | str | None = "runs/checkpoints.sqlite"
 
     checkpointer_path = Path(checkpointer_path)
     checkpointer_path.parent.mkdir(parents=True, exist_ok=True)
-    # SqliteSaver.from_conn_string returns a context manager. For a compiled
-    # graph we want a persistent checkpointer, so open the connection directly.
     import sqlite3
     conn = sqlite3.connect(str(checkpointer_path), check_same_thread=False)
-    checkpointer = SqliteSaver(conn)
-    return g.compile(checkpointer=checkpointer)
+    return g.compile(checkpointer=SqliteSaver(conn))
 
 
 def run_one(source_path: str, graph=None, thread_id: str | None = None) -> GraphState:
-    """Run a single invoice through the graph. Convenience wrapper."""
     graph = graph if graph is not None else build_graph()
     config = {"configurable": {"thread_id": thread_id or source_path}}
     initial: GraphState = {
         "source_path": source_path,
         "findings": [],
         "nodes_fired": [],
+        "model_calls": [],
+        "tool_calls": [],
+        "critic_challenges": [],
         "critic_rounds": 0,
     }
     return graph.invoke(initial, config=config)
