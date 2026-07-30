@@ -328,3 +328,17 @@ Append-only. Each entry: Decision / Alternatives considered / Why + date.
 2026-07-29
 
 ---
+
+**Decision:** Corpus arithmetic record (exhaustively verified across all 20 files after INV-1007 revealed that a partial verification had missed a second grand-total error):
+
+  - **INV-1013**: grand-total error of **+$50.00** (overcharge). Subtotal $21,040 + Tax 7% $1,472.80 = $22,512.80, stated total $22,562.80. **Documented** in `generate_pdfs.py` (`grand_total + 50`) and mirrored in `invoice_1013.json`.
+  - **INV-1007**: grand-total error of **−$110.00** (undercharge). Subtotal $14,750 + Tax 6% $885 = $15,635, stated total $15,525. **Undocumented** in CLAUDE.md §6, discovered by AR-004.
+  - **INV-1009**: subtotal error of **+$1,250** (stated $1,000 against line items summing to −$250 due to `quantity=-5` on WidgetA). The downstream grand-total delta of −$1,250 is a consequence of the same underlying negative-quantity issue and fires AR-004 as well, but the root cause is the subtotal (AR-002).
+
+All other 17 files reconcile exactly on both the line-sum-vs-stated-subtotal step and the (subtotal + tax + additional_charges) vs stated_total step. INV-1014 reconciles exactly in USD after FX: EUR-native totals × 1.14 match stated USD totals to the cent. Verification script: transient one-off; the invariant is locked by the AR-002 / AR-004 tests plus the negative assertion `test_ar_004_does_not_fire_on_clean_inv_1001` and `test_ar_004_does_not_fire_on_inv_1010_because_shipping_is_included`.
+
+**Alternatives considered:** Trust the initial partial check that found only INV-1013 and INV-1009.
+**Why:** The initial pass missed INV-1007 because it was not on any hand-curated list. Deriving the answer from the validator against every file avoids the same trap next time.
+2026-07-29
+
+---
