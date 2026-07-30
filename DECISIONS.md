@@ -267,3 +267,57 @@ Append-only. Each entry: Decision / Alternatives considered / Why + date.
 2026-07-29
 
 ---
+
+**Decision:** Fuzzy vendor threshold: `difflib.SequenceMatcher` ratio ≥ 0.70 on lowercased vendor names, plus a preceding claim-based exact-substring check that looks for any master vendor name inside `vendor_claims`.
+**Alternatives considered:** rapidfuzz's token-set ratio (adds a dependency), threshold 0.60 or 0.80.
+**Why:** Calibrated against the deliberate false-positive: `Acme Industrial Supplies` (INV-1006) shares the token `Acme` with the buyer `Acme Corp`. SequenceMatcher gives that pair ~0.42 — safely below 0.70 in either direction. INV-1012's flagship signal — `QuickShip Distributers` claiming `(formerly FastShip Ltd.)` — is caught by the claim-based path (FastShip Ltd. is a master vendor name that appears as a substring inside the claim), not by fuzzy on the raw vendor name (`quickship distributers` vs `fastship ltd.` scores ~0.30, well below 0.70). Both paths must exist; each catches a distinct class of case.
+2026-07-29
+
+---
+
+**Decision:** `AR-003` (tax mismatch as an independent check) is intentionally NOT implemented. Tax is only checked as a component of the grand-total sum (`AR-004`). Where the source states a tax amount without a rate — INV-1010 states `Sales Tax: $335.00` with no percentage — we do not infer a rate and then flag the result.
+**Alternatives considered:** Infer the tax rate as `stated_tax / stated_subtotal` and flag when it lands on a suspicious value (e.g. non-multiple of 0.5%).
+**Why:** Inferring a rate to then flag it is a manufactured finding. The invoice claims a subtotal, a tax, and a total; the grand-total check (AR-004) already fails if `subtotal + tax + extras ≠ total`. Adding an inferred-rate check would fire on every legitimate invoice with a non-round tax amount and dilute the AR- signal.
+2026-07-29
+
+---
+
+**Decision:** DP-001 completeness preference: choose the record with more non-null fields among `stated_subtotal`, `stated_tax`, `payment_terms`, `vendor_address`; tie-break on largest `len(line_items)`. Preferred record and reason logged in the DP-001 evidence.
+**Alternatives considered:** Prefer .pdf over .txt (renders are canonical); prefer the file with more raw bytes; prefer alphabetically-first source_file.
+**Why:** INV-1011's PDF is materially LESS complete than its txt source (no subtotal/tax lines rendered). Preferring PDF would systematically lose fields for this pair. Byte-count and alphabetical fall out arbitrarily. Non-null-field count reflects what the AP clerk actually cares about — how many fields are filled. Line-item count breaks ties without introducing a format bias.
+2026-07-29
+
+---
+
+**Decision:** Discovery — INV-1007 (row-per-item CSV) has an undocumented arithmetic error. Subtotal $14,750 + Tax (6%) $885 = $15,635, but the file states Total $15,525 — a $110 discrepancy. CLAUDE.md §6 does not call this out.
+**Alternatives considered:** Treat it as a bug in the corpus and suppress the finding; adjust AR-004 tolerance to hide it.
+**Why:** The file literally states inconsistent numbers. AR-004 correctly fires. Suppressing the finding to match CLAUDE.md's expectation would be silently accommodating a documentation gap. Recording this here means the ground-truth table in Phase 9 will list INV-1007 as an AR-004 case, and if the corpus author later confirms the trap was intentional (as with INV-1013's $50), we already have the citation.
+2026-07-29
+
+---
+
+**Decision:** IN-003 (aggregate exceeds stock) does NOT fire for inactive items (only IN-002 does). INV-1003's `FakeItem` qty 100 vs stock 0 produces IN-002 ("inactive with zero stock"), not IN-002 + IN-003.
+**Alternatives considered:** Fire both — IN-002 for the inactive status and IN-003 for the demand overrun.
+**Why:** For an inactive item, the correct message is "this SKU is dead"; the demand vs standing-stock comparison is a category error (stock is 0 by definition for inactive). The signal is not "you asked for more than we have" — it is "you can't order this at all." IN-002 already carries CRITICAL-adjacent weight; adding IN-003 duplicates without adding evidence.
+2026-07-29
+
+---
+
+**Decision:** Severity baseline calibration (Phase 4 initial; revisit in Phase 7 with the eval harness):
+  - CRITICAL: `AR-005` (negative qty), `AR-006` (negative total), `VN-005` (empty vendor), `DP-002` (differing content under same number).
+  - HIGH: `AR-002`/`AR-004` (subtotal/grand-total mismatch), `IN-001`/`IN-002`/`IN-003`, `PR-001` (over reference), `VN-001`/`VN-003`(master)/`VN-004`, `TM-003`, `DP-003`, `PO-001`.
+  - MEDIUM: `AR-001` (single-line mismatch), `AR-003` (never fires), `PR-003`, `VN-002`, `VN-003`(unknown-vendor variant), `TM-001`, `DP-001`, `PO-002`, `FR-002`, `FR-003`.
+  - LOW: `PR-002` (under reference), `PR-004` (no reference), `TM-002`, `FR-001`.
+  - INFO: `EX-001`, `PO-003` (FX applied).
+**Alternatives considered:** Push more items to CRITICAL to force auto-rejects; keep everything MEDIUM to defer all decisions.
+**Why:** CRITICAL is reserved for "cannot pay under any reading" — arithmetic that can't be reconciled (negative), the party that can't be identified (empty vendor), and the case where paying twice is a live risk (DP-002). Everything else is judgment; the Adjudicator in Phase 5 aggregates. Findings first, severity next — the finding set is right and this calibration is a deliberate starting point, not a fit to the 5/7/5 target.
+2026-07-29
+
+---
+
+**Decision:** Disagreement with CLAUDE.md §6 (recorded, not silently accommodated): §6 documents INV-1013's aggregate-stock overrun and the +$50 grand-total error together, but does not name INV-1007's $110 grand-total error at all. My reading: INV-1007 is a genuine additional trap the current §6 text omits; AR-004 correctly fires on it. If future revisions of the case brief clarify that INV-1007 was intended to be arithmetically clean, the fix is in the corpus, not the validator.
+**Alternatives considered:** Read §6's silence as normative and suppress AR-004 for INV-1007.
+**Why:** Every dollar in an AP system is either right or wrong. The invoice's own arithmetic is wrong by $110. Adjusting the validator to accommodate a documentation gap trains the system to hide arithmetic errors when the doc doesn't warn about them — the exact opposite of the phase's contract.
+2026-07-29
+
+---

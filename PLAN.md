@@ -106,15 +106,15 @@ Run a throwaway extraction against the four hardest documents, three times each,
 ## Phase 4 — Validators
 Each is pure: `(Invoice, reference) -> list[Finding]`.
 
-- [ ] `arithmetic.py` — line totals, subtotal, tax, grand total, negative quantities, negative totals, non-line-item charges (INV-1010 shipping)
-- [ ] `inventory.py` — **aggregate by canonical item within invoice**, then check stock; unknown item; zero-stock item
-- [ ] `pricing.py` — vs reference ±5%, post-FX; intra-invoice price inconsistency; missing reference
-- [ ] `vendor.py` — master lookup, fuzzy match without exact match, domain mismatch, inactive-vendor rename claim, missing name
-- [ ] `terms.py` — due date vs `date + terms` (±2 days), terms vs contract, unparseable/past due dates
-- [ ] `duplicates.py` — `(vendor, invoice_number)` with content hash; identical-file vs differing-content vs revision-marker
-- [ ] `policy.py` — threshold, near-threshold band, FX applied
-- [ ] `signals.py` — urgency language, wire-transfer requests, suspicious address
-- [ ] Test each validator against its trigger invoice
+- [x] `arithmetic.py` — line totals, subtotal, tax, grand total, negative quantities, negative totals, non-line-item charges (INV-1010 shipping)
+- [x] `inventory.py` — **aggregate by canonical item within invoice**, then check stock; unknown item; zero-stock item
+- [x] `pricing.py` — vs reference ±5%, post-FX; intra-invoice price inconsistency; missing reference
+- [x] `vendor.py` — master lookup, fuzzy match without exact match, domain mismatch, inactive-vendor rename claim, missing name
+- [x] `terms.py` — due date vs `date + terms` (±2 days), terms vs contract, unparseable/past due dates
+- [x] `duplicates.py` — `(vendor, invoice_number)` with content hash; identical-file vs differing-content vs revision-marker
+- [x] `policy.py` — threshold, near-threshold band, FX applied
+- [x] `signals.py` — urgency language, wire-transfer requests, suspicious address
+- [x] Test each validator against its trigger invoice
 
 **Exit:** every invoice in the ground-truth table produces its expected findings. This is the first real checkpoint.
 
@@ -211,3 +211,5 @@ Claude Code appends one line per session: date, phases touched, anything that su
 2026-07-29 — Phase 2 complete. Provider (retry + cost/latency capture) + cassette (key hashes prompt text; auto/live/replay modes; credential redaction). Live smoke round-trip works end-to-end (`pong` cassette recorded). Surprises: `grok-4.5` resolves to `grok-4.5` (not a dated build) on this account — proven by the ModelCall capture; a trivial single-word reply cost 214 input tokens (system-prompt overhead is not zero). 58 pass, 2 skip.
 
 2026-07-29 — Phase 3 complete. All 20 corpus files produce Invoices. Deterministic adapters (json/csv/xml) + LLM adapters (text/pdf) + triage router + repair loop. prompts/extractor.md now instructs declared repairs — INV-1012 produces 2 explicit corrections for the OCR substitutions (previously silent). No LLM fallbacks fired on this corpus (all deterministic parsers cleared MIN_FIELD_COVERAGE=0.75). Both previously-skipped hash tests pass end-to-end. Surprise: `.env` had LLM_MODE=live from Phase 2 dev, making Phase 3 test runs 150+ seconds per invocation until switched to auto. 110 pass, 0 skip.
+
+2026-07-29 — Phase 4 complete. All 8 validators + registry + guardrail predicate. Findings match CLAUDE.md §6 with one discovery: INV-1007 has an undocumented $110 grand-total arithmetic error (14750 subtotal + 885 tax = 15635, stated total 15525). Every invoice produces expected findings; INV-1006 remains clean (fuzzy VN-002 does not false-positive on Acme Industrial); INV-1010's $150 shipping correctly does NOT trip AR-004. 145 pass.
