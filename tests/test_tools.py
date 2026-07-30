@@ -53,6 +53,28 @@ def test_get_vendor_record_quickship_surfaces_fastship_candidate() -> None:
     assert fastship.relationship_since == "2016-10-01"
 
 
+def test_get_vendor_record_marks_noise_scores_below_threshold() -> None:
+    """Fuzzy name similarity is NOT the signal that resolves INV-1012.
+    Every QuickShip-vs-master score is below the VN-002 threshold; the
+    tool must make that visible so the reader does not mistake ranking
+    among noise scores (0.348 vs 0.343) for meaningful similarity."""
+    r = get_vendor_record(VendorRecordQuery(name="QuickShip Distributers"))
+    assert r.match_threshold == 0.70
+    assert all(c.below_threshold for c in r.fuzzy_candidates), (
+        f"expected every candidate below 0.70; got: "
+        f"{[(c.name, c.score, c.below_threshold) for c in r.fuzzy_candidates]}"
+    )
+
+
+def test_get_vendor_record_surfaces_threshold_on_every_result() -> None:
+    """The threshold field is set even when candidates exist above it."""
+    r = get_vendor_record(VendorRecordQuery(name="Acme Industrial Supplies"))
+    assert r.match_threshold == 0.70
+    # Above-threshold candidates (if any) are flagged False; below True.
+    for c in r.fuzzy_candidates:
+        assert c.below_threshold == (c.score < r.match_threshold)
+
+
 def test_get_vendor_record_exact_match_on_acme_industrial() -> None:
     """The false-positive vendor from Phase 4. Exact-matches cleanly."""
     r = get_vendor_record(VendorRecordQuery(name="Acme Industrial Supplies"))

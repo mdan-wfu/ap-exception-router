@@ -37,6 +37,7 @@ class VendorFuzzyCandidate(BaseModel):
     model_config = _M
     name: str
     score: float               # 0.0–1.0 raw SequenceMatcher ratio
+    below_threshold: bool      # True if score < VN-002 match_threshold
     status: str
     relationship_since: str
 
@@ -46,6 +47,11 @@ class VendorRecordResult(BaseModel):
     query: str
     exact_match: VendorMasterRow | None
     fuzzy_candidates: list[VendorFuzzyCandidate]
+    # Below this score, a candidate is neighborhood noise — not a name match.
+    # See src/validators/vendor.py::FUZZY_THRESHOLD. Surfaced here so a reader
+    # of the tool output does not mistake ranking among noise scores for
+    # meaningful similarity.
+    match_threshold: float
 
 
 # ---------------------------------------------------------------------------

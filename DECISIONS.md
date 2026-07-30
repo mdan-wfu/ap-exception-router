@@ -400,3 +400,12 @@ Recorded here so a future reviewer sees the reasoning rather than second-guessin
 2026-07-30
 
 ---
+
+**Decision:** `VendorRecordResult` now carries a top-level `match_threshold: float` and each `VendorFuzzyCandidate` carries a `below_threshold: bool`. Candidates are NOT filtered — neighborhood context stays visible — but their weakness is made legible.
+**Alternatives considered:** Return only above-threshold candidates; return scores without any reference number.
+**Why:** For `QuickShip Distributers`, FastShip Ltd. (0.343) and Acme Industrial Supplies (0.348) both score far below the VN-002 threshold of 0.70. Presented as a bare ranked list, that implies meaningful ordering between two indistinguishable noise scores AND puts an irrelevant vendor first for the corpus's flagship escalation case. With the threshold surfaced and per-candidate below_threshold flag, a model reading the result can tell 0.348 is neighborhood noise, not a name match.
+
+**Fuzzy name similarity is NOT the signal that resolves INV-1012.** The signal is the explicit `vendor_claims` entry `(formerly FastShip Ltd.)`, whose substring exactly matches the master name `FastShip Ltd.`. That exact-match check is what fires VN-004 in the validator, and it is the substring-hit path in `get_vendor_record` (which surfaces FastShip at score 1.0 when the caller passes the raw vendor string containing the claim). The fuzzy candidate list is corroborating context only — it must not be presented as though it carries the finding, and downstream prompts should read it that way.
+2026-07-30
+
+---

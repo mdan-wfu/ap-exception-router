@@ -19,7 +19,7 @@ from src.tools.models import (
     VendorRecordResult,
 )
 from src.validators.reference import Reference
-from src.validators.vendor import score_candidates
+from src.validators.vendor import FUZZY_THRESHOLD, score_candidates
 
 # The tool uses a lower investigative threshold than the validator so the
 # Adjudicator sees neighborhood context (e.g. FastShip Ltd. as a candidate
@@ -68,6 +68,7 @@ def get_vendor_record(query: VendorRecordQuery) -> VendorRecordResult:
         VendorFuzzyCandidate(
             name=record.name,
             score=round(score, 4),
+            below_threshold=score < FUZZY_THRESHOLD,
             status=record.status,
             relationship_since=record.relationship_since,
         )
@@ -86,6 +87,7 @@ def get_vendor_record(query: VendorRecordQuery) -> VendorRecordResult:
                 candidates.append(VendorFuzzyCandidate(
                     name=record.name,
                     score=1.0,
+                    below_threshold=False,
                     status=record.status,
                     relationship_since=record.relationship_since,
                 ))
@@ -95,6 +97,7 @@ def get_vendor_record(query: VendorRecordQuery) -> VendorRecordResult:
         query=query.name,
         exact_match=_to_master_row(exact) if exact is not None else None,
         fuzzy_candidates=candidates,
+        match_threshold=FUZZY_THRESHOLD,
     )
 
 
