@@ -1,12 +1,19 @@
 """All domain constants. Loaded from env where appropriate. No logic here."""
 import os
+from pathlib import Path
+
 from dotenv import load_dotenv
 
 load_dotenv()
 
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+
 # LLM provider
 XAI_API_KEY: str = os.environ.get("XAI_API_KEY", "")
-GROK_MODEL: str = os.environ.get("GROK_MODEL", "")
+# Default matches the model cassettes were recorded against, so a cold clone
+# (no .env, replay mode) hits the same fingerprint. Cassette keys include the
+# model identifier; if this default drifts, prior cassettes go unreachable.
+GROK_MODEL: str = os.environ.get("GROK_MODEL", "grok-4.5")
 # One of: "live" (always call), "replay" (never call; miss is fatal), "auto"
 # (replay on hit, live on miss). Default "auto" so `python main.py ...` works
 # both with and without a fresh API key.
@@ -40,3 +47,16 @@ FX_RATES: dict[str, float] = {"EUR": 1.14}
 # for the reasoning and the future-work note on giving round 2 a different job.
 MAX_CRITIC_ROUNDS: int = 1
 MAX_REPAIR_ATTEMPTS: int = 2
+
+# Audit store — separate DB from reference.db, gitignored via *.db pattern,
+# rebuilt idempotently by `make audit-reset`.
+AUDIT_DB_PATH: Path = _REPO_ROOT / "runs" / "audit.sqlite"
+
+# Human gate mode. How the graph handles ESCALATE outcomes.
+#   "interactive" — pause on interrupt(), prompt stdin, resume
+#   "demo"        — auto-resolve from HUMAN_GATE_FIXTURE_PATH so `make demo`
+#                   never hangs
+#   "queue"       — record the escalation to the audit store and exit
+#                   without resuming (Phase 11 dashboard reads the queue)
+HUMAN_GATE_MODE: str = os.environ.get("HUMAN_GATE_MODE", "interactive")
+HUMAN_GATE_FIXTURE_PATH: Path = _REPO_ROOT / "data" / "fixtures" / "human_gate.json"
