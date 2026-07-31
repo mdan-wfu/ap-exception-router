@@ -28,7 +28,7 @@ demo: seed audit-reset
 	@rm -f runs/checkpoints.sqlite
 	LLM_MODE=replay HUMAN_GATE_MODE=demo .venv/bin/python main.py --batch --replay
 
-test:
+test: seed
 	.venv/bin/pytest tests/
 
 report:
@@ -59,17 +59,17 @@ demo-digest-check: demo
 		exit 1; \
 	fi
 
-eval:
+eval: seed
 	@LLM_MODE=replay HUMAN_GATE_MODE=demo .venv/bin/python -m eval.run_eval
 
 # Authored adversarial set — separate corpus, separate ground truth. Kept out
 # of `make demo` and `make eval` so the reviewer's first-run numbers are the
 # provided corpus only.
-demo-adversarial: audit-reset
+demo-adversarial: seed audit-reset
 	@rm -f runs/checkpoints.sqlite
 	@LLM_MODE=replay HUMAN_GATE_MODE=demo .venv/bin/python main.py --batch --replay --corpus data/adversarial
 
-eval-adversarial:
+eval-adversarial: seed
 	@LLM_MODE=replay HUMAN_GATE_MODE=demo .venv/bin/python -m eval.run_eval \
 		--corpus data/adversarial \
 		--ground-truth eval/ground_truth_adversarial.yaml \
@@ -79,5 +79,5 @@ eval-adversarial:
 # Populate the audit store first with `make demo` and (optionally)
 # `make demo-adversarial`.
 # Boots at http://127.0.0.1:8000
-dashboard:
+dashboard: seed
 	@LLM_MODE=replay HUMAN_GATE_MODE=demo .venv/bin/uvicorn src.ui.app:app --host 127.0.0.1 --port 8000 --reload
