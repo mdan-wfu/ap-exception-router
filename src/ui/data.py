@@ -45,13 +45,20 @@ def corpus_of(source_file: str) -> str:
 # ---------------------------------------------------------------------------
 
 def list_runs() -> list[dict[str, Any]]:
-    """Every run in the store, one row per invoice, sorted so escalations
-    surface first (the manager's actual job)."""
+    """Every run in the store, one row per invoice.
+
+    IMPORTANT — every row carries `effective_outcome`, the authoritative
+    state after model → human → amendments has resolved. All views, filters,
+    counts, tab-membership checks MUST route through this field (never the
+    raw `outcome` column) — otherwise amended state doesn't reach the right
+    view. See DECISIONS 2026-07-31 effective-outcome-everywhere for why
+    this is enforced at the query layer rather than left to each view."""
+    _ensure_amendments_table()
     with _conn() as c:
         rows = c.execute("""
             SELECT r.id, r.invoice_number, r.vendor_name, r.source_file,
                    r.source_format, r.stated_total_usd, r.currency, r.outcome,
-                   r.human_outcome, r.rationale,
+                   r.human_outcome, r.human_note, r.rationale, r.scribe_note,
                    (SELECT COUNT(*) FROM findings f WHERE f.run_id = r.id) AS n_findings,
                    (SELECT COALESCE(SUM(cost_usd), 0) FROM model_calls m
                     WHERE m.run_id = r.id) AS cost_usd,
@@ -60,23 +67,52 @@ def list_runs() -> list[dict[str, Any]]:
             FROM runs r
             ORDER BY r.invoice_number
         """).fetchall()
-    # Pull human_note as well so we can flag demo-fixture auto-resolutions
-    with _conn() as c:
-        notes = {
-            r["invoice_number"]: r["human_note"]
-            for r in c.execute("SELECT invoice_number, human_note FROM runs").fetchall()
+        # Latest amendment per invoice, so we compute effective_outcome
+        amend_rows = c.execute("""
+            SELECT invoice_number, new_outcome
+            FROM decision_amendments
+            WHERE id IN (
+                SELECT MAX(id) FROM decision_amendments GROUP BY invoice_number
+            )
+        """).fetchall()
+        latest_amendment = {r["invoice_number"]: r["new_outcome"] for r in amend_rows}
+        # Amendment count per invoice (surfaces "amended" chip)
+        counts = {
+            r["invoice_number"]: r["n"]
+            for r in c.execute("""
+                SELECT invoice_number, COUNT(*) AS n
+                FROM decision_amendments GROUP BY invoice_number
+            """).fetchall()
         }
+
     result = []
     for r in rows:
         d = dict(r)
         d["corpus"] = corpus_of(d["source_file"])
         d["is_duplicate_pair"] = d["invoice_number"] == "INV-1004"
-        d["human_note"] = notes.get(d["invoice_number"])
         d["auto_resolved"] = _is_auto_resolved(d["human_note"])
+        d["amendment_count"] = counts.get(d["invoice_number"], 0)
+        d["latest_amendment"] = latest_amendment.get(d["invoice_number"])
+        # Effective outcome: amendment > human > model.
+        d["effective_outcome"] = (
+            d["latest_amendment"] or d["human_outcome"] or d["outcome"]
+        )
+        # Membership shortcuts for view filters.
+        d["is_resolved"] = d["effective_outcome"] in ("APPROVE", "REJECT")
+        d["is_held"] = d["effective_outcome"] == "HOLD"
+        d["is_awaiting"] = (
+            d["outcome"] == "ESCALATE"
+            and d["effective_outcome"] in ("ESCALATE", None)
+        )
+        d["is_straight_through"] = (
+            d["outcome"] == "APPROVE"
+            and not d["human_outcome"]
+            and d["amendment_count"] == 0
+        )
         result.append(d)
-    # escalations first, then rejects, then approves — the manager's ordering
-    order = {"ESCALATE": 0, "REJECT": 1, "APPROVE": 2, "FAILED": 3}
-    result.sort(key=lambda x: (order.get(x["outcome"], 9), x["invoice_number"]))
+    # Sort so awaiting-decision items surface first — the manager's ordering.
+    order = {"ESCALATE": 0, "REJECT": 1, "HOLD": 1, "APPROVE": 2, "FAILED": 3}
+    result.sort(key=lambda x: (order.get(x["effective_outcome"], 9), x["invoice_number"]))
     return result
 
 
@@ -88,28 +124,31 @@ def _is_auto_resolved(note: str | None) -> bool:
 
 
 def corpus_summary(corpus: str) -> dict[str, Any]:
-    """Aggregate metrics for one corpus (provided or adversarial)."""
+    """Aggregate metrics for one corpus. Counts by EFFECTIVE outcome so
+    amendments reach the numbers on the hero row, not just the detail page."""
     rows = [r for r in list_runs() if r["corpus"] == corpus]
     total = len(rows)
     if total == 0:
         return {"total": 0, "approve": 0, "reject": 0, "escalate": 0,
-                "cost": 0.0, "cost_per_invoice": 0.0, "straight_through_pct": 0.0}
-    by_outcome = {"APPROVE": 0, "REJECT": 0, "ESCALATE": 0}
+                "held": 0, "cost": 0.0, "cost_per_invoice": 0.0,
+                "straight_through_pct": 0.0, "queue_depth": 0}
+    by_eff = {"APPROVE": 0, "REJECT": 0, "ESCALATE": 0, "HOLD": 0}
     for r in rows:
-        by_outcome[r["outcome"]] = by_outcome.get(r["outcome"], 0) + 1
+        eff = r["effective_outcome"]
+        by_eff[eff] = by_eff.get(eff, 0) + 1
     total_cost = sum(float(r["cost_usd"] or 0) for r in rows)
-    straight_through = sum(
-        1 for r in rows if r["outcome"] == "APPROVE" and not r["human_outcome"]
-    )
+    straight = sum(1 for r in rows if r["is_straight_through"])
+    awaiting = sum(1 for r in rows if r["is_awaiting"])
     return {
         "total": total,
-        "approve": by_outcome["APPROVE"],
-        "reject": by_outcome["REJECT"],
-        "escalate": by_outcome["ESCALATE"],
+        "approve": by_eff["APPROVE"],
+        "reject": by_eff["REJECT"],
+        "escalate": by_eff["ESCALATE"],
+        "held": by_eff["HOLD"],
         "cost": total_cost,
         "cost_per_invoice": total_cost / total,
-        "straight_through_pct": 100 * straight_through / total,
-        "queue_depth": by_outcome["ESCALATE"],
+        "straight_through_pct": 100 * straight / total,
+        "queue_depth": awaiting + by_eff["HOLD"],
     }
 
 
@@ -363,31 +402,38 @@ def record_human_decision(
 
 
 def human_queue() -> list[dict[str, Any]]:
-    """Escalated runs awaiting a genuine human decision. Demo-fixture auto-
-    resolutions with human_outcome=None (HOLD in the fixture) surface here
-    too, tagged auto_resolved=True so the template can render them with the
-    `auto-resolved · demo fixture` chip. Actual dashboard-triggered HOLD
-    goes to the /held view, not here."""
-    return [
-        r for r in list_runs()
-        if r["outcome"] == "ESCALATE" and r.get("human_outcome") in (None, "")
-    ]
+    """Runs awaiting a genuine human decision — filter on the EFFECTIVE
+    outcome so amendments back to escalate (rare but possible) surface
+    correctly, and amendments to APPROVE/REJECT/HOLD leave this view."""
+    return [r for r in list_runs() if r["is_awaiting"]]
 
 
 def held_queue() -> list[dict[str, Any]]:
-    """Actionable held items — a clerk clicked HOLD from the dashboard and
-    intends to return once she has more info. Not resolved, not awaiting —
-    a third state. Held is NEVER terminal."""
-    return [r for r in list_runs() if r.get("human_outcome") == "HOLD"]
+    """Held items — effective outcome is HOLD, from either a fixture
+    resolution, a dashboard action, OR an amendment. Held is never
+    terminal; items remain fully actionable."""
+    return [r for r in list_runs() if r["is_held"]]
 
 
 def resolved_queue() -> list[dict[str, Any]]:
-    """Runs where a genuine APPROVE/REJECT was recorded (from the fixture
-    OR a dashboard action). Excludes HOLD (a held item is not resolved)."""
-    return [
-        r for r in list_runs()
-        if r.get("human_outcome") in ("APPROVE", "REJECT")
-    ]
+    """Runs whose EFFECTIVE outcome is APPROVE or REJECT (fixture, clerk,
+    or amendment). Excludes HOLD — a held item is not resolved."""
+    return [r for r in list_runs() if r["is_resolved"]]
+
+
+def demo_fixture_active() -> bool:
+    """True if ANY run in the store carries a demo-fixture human_note.
+    Used to decide whether the top-of-page 'demo mode' banner shows.
+    See DECISIONS 2026-07-31 demo-banner-not-per-row."""
+    return any(r["auto_resolved"] for r in list_runs())
+
+
+def has_mixed_decisions(rows: list[dict[str, Any]]) -> bool:
+    """True if a list contains BOTH fixture and non-fixture decisions.
+    When a table mixes the two, per-row chips distinguish them; when
+    every row is one kind, the banner carries it."""
+    kinds = {bool(r["auto_resolved"]) for r in rows if r["effective_outcome"]}
+    return len(kinds) > 1
 
 
 # ---------------------------------------------------------------------------

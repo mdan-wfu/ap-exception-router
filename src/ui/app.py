@@ -26,7 +26,19 @@ from src.ui import data
 
 
 TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
-templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
+
+def _demo_mode_ctx(request):
+    """Every template sees `demo_mode` = True iff any run in the store was
+    resolved by the HUMAN_GATE_MODE=demo fixture. Drives the top banner in
+    base.html so per-row `auto` chips minimize to only where they actually
+    distinguish. See DECISIONS 2026-07-31 demo-banner-not-per-row."""
+    try:
+        return {"demo_mode": data.demo_fixture_active()}
+    except Exception:
+        return {"demo_mode": False}
+
+templates = Jinja2Templates(directory=str(TEMPLATES_DIR),
+                             context_processors=[_demo_mode_ctx])
 
 app = FastAPI(title="AP Exception Router — Dashboard", docs_url=None, redoc_url=None)
 
@@ -122,10 +134,14 @@ def duplicate_view(request: Request, invoice_number: str):
 
 @app.get("/queue", response_class=HTMLResponse)
 def human_queue_view(request: Request):
+    resolved = data.resolved_queue()
     return templates.TemplateResponse(request, "human_queue.html", {
         "active_nav": "review",
         "awaiting": data.human_queue(),
-        "resolved": data.resolved_queue(),
+        "resolved": resolved,
+        # Per-row `source` column only when the table mixes fixture + real
+        # decisions. Otherwise the top banner carries it.
+        "mixed": data.has_mixed_decisions(resolved),
     })
 
 
