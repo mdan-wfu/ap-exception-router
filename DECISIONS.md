@@ -813,3 +813,19 @@ Case (a) — not (b): no post-run correction. Prior wording in `docs/eval-result
 2026-07-31
 
 ---
+
+**Decision (dashboard-settlement-fix — direct settle invocation):** The dashboard's approve/reject action wrote `human_outcome` to the audit store but never triggered the settle node — so `mock_payment` never fired for human-approved invoices, no PAID row was written, and the Payments ledger stayed empty. `record_human_decision` now calls settle-node logic directly via `_invoke_settlement`, which reconstructs the minimal state (invoice via `re_extract`, decision via `Decision(outcome, rationale, confidence)`) and invokes `src.nodes.settle.settle(state)`.
+**Alternatives considered:** (a) resume the checkpointed graph run via LangGraph — the graph doesn't actually use `interrupt()`; `human_gate` returns synchronously in every mode (demo / interactive / queue), so completed corpus runs have no paused state to resume from. This ruled out the "prefer checkpoint resume" path from the task spec. (b) rewire the graph to use `interrupt()` so future runs pause — bigger change, would need a real re-record.
+**Why:** The settle node's `prior_paid_settlement` idempotency check on `(invoice_number, vendor_name)` is the guardrail against double-pay and it works from either invocation path — we're not bypassing it. The graph-invoked and dashboard-invoked settlement paths converge on the same audit-store write. Six new tests in `tests/test_dashboard_settlement.py` lock the six required behaviors (approve creates settlement + ref; appears in Payments; amend to REJECT keeps it in Payments flagged; approve from Held settles too; HOLD creates no settlement; amend REJECT→APPROVE fires settlement once and only once).
+2026-07-31
+
+**Decision (get_run enriched with the same derived fields as list_runs):** `get_run` now computes `effective_outcome`, `is_awaiting`, `is_held`, `is_resolved`, `amendment_count`, `latest_amendment`, `auto_resolved` — same field set `list_runs` computes per row. The detail template previously assumed these existed and broke when they didn't (`amendment_count` UndefinedError once the decide-from-detail block was added). Both entry points now return the same shape.
+2026-07-31
+
+**Decision (Human Review card restructure — two-column body, dark decision zone):** Each awaiting card is now three horizontal bands: (1) header (vendor / invoice / Amount Payable), unchanged; (2) two-column body — evidence left on a paper-alt background, System recommendation + prominent primary-blue "See the full analysis →" button right; (3) `_decision_block.html` on a dark surface. Extracted the decision surface to a shared partial so /queue, /held, and the detail page all render the same block (Part C). The button is `btn-primary` instead of a text link — the detail page is the substantive path and it was underplayed.
+2026-07-31
+
+**Decision (decide-from-detail block, Part C):** Awaiting-review invoices render `_decision_block.html` inline on the detail page (same buttons, same endpoint, same audit-trail semantics) so a reviewer who navigated there to understand the invoice can decide without going back to Human Review. Already-decided invoices render a "Current decision" panel high on the page with an `amend →` button anchored to the amendment form further down (which opens automatically via `?open=amend`). The detail page is now the decision surface; Human Review is the work list that routes reviewers to it.
+2026-07-31
+
+---
