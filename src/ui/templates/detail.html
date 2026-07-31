@@ -43,6 +43,48 @@
 </div>
 {% endif %}
 
+<!-- Decide-from-detail block — Part C. Awaiting-review invoices get the
+     same decision surface as Human Review, right here where the reader
+     is looking. Already-decided invoices get a prominent "current
+     decision" panel with an amend link (form itself stays on Decision
+     history below). -->
+{% if run.is_awaiting %}
+<section class="card mb-8">
+  <div class="card-header">
+    <h3 class="display text-base">Decide on this invoice</h3>
+  </div>
+  {% set r = run %}
+  {% include "_decision_block.html" %}
+</section>
+{% elif effective_outcome %}
+<section class="card mb-8">
+  <div class="card-header flex items-baseline gap-3">
+    <h3 class="display text-base">Current decision</h3>
+    <span class="chip chip-{{ effective_outcome|lower }}">{{ effective_outcome }}</span>
+    {% if run.amendment_count > 0 %}
+      <span class="chip chip-amended">amended {{ run.amendment_count }}×</span>
+    {% endif %}
+  </div>
+  <div class="card-body flex items-baseline gap-6">
+    <div class="flex-1 text-sm" style="color: var(--ink-mid);">
+      {% if effective_outcome == 'APPROVE' %}
+        This invoice is approved and settled. Payment reference on the Settlement panel below.
+      {% elif effective_outcome == 'REJECT' %}
+        This invoice was rejected. No payment issued.
+      {% elif effective_outcome == 'HOLD' %}
+        This invoice is on hold; it will remain actionable on the <a href="/held">Held</a> tab until you decide.
+      {% else %}
+        This invoice is awaiting resolution.
+      {% endif %}
+    </div>
+    <div>
+      <a href="#amend" class="btn btn-danger" style="text-decoration: none;">amend →</a>
+      <div class="text-xs mt-1 text-right" style="color: var(--ink-mute);">appends; never overwrites</div>
+    </div>
+  </div>
+</section>
+{% endif %}
+
 <!-- 1. Source ⟷ Extracted -->
 <div class="grid grid-cols-2 gap-6 mb-8">
   <div class="panel">
@@ -250,9 +292,9 @@
       </li>
       {% endfor %}
     </ol>
-    <div class="mt-6 pt-4 rule">
-      <details>
-        <summary class="cursor-pointer text-sm" style="color: var(--text-mute);">Amend the current decision</summary>
+    <div id="amend" class="mt-6 pt-4 rule">
+      <details {% if request.query_params.get('open') == 'amend' %}open{% endif %}>
+        <summary class="cursor-pointer text-sm" style="color: var(--ink-mute);">Amend the current decision</summary>
         <form method="post" action="/invoice/{{ run.invoice_number }}/amend" class="mt-4 flex flex-col gap-3">
           <div class="text-xs" style="color: var(--text-mute);">
             Amendments are appended. The original decisions above stay visible. If the currently-effective outcome is APPROVE and settlement fired, an amendment will surface a payment-reversal-required flag — the system cannot un-call a payment.

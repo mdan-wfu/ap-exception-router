@@ -1,0 +1,37 @@
+{# Reusable decision block. Renders the note field + three action
+   buttons with consequence captions on a dark surface — same shape
+   used by Human Review, Held, and (for awaiting-review invoices) the
+   detail page. Args: `r` (the run dict, needs invoice_number and,
+   optionally, is_held to switch button labels for a held item). #}
+<form method="post" action="/queue/{{ r.invoice_number }}"
+      class="p-6" style="background: var(--ink-dark); color: var(--text-inv); border-radius: 0 0 6px 6px;">
+  <div class="text-xs uppercase tracking-widest mb-3" style="color: var(--ink-dim);">
+    Your decision
+  </div>
+  <input name="note" type="text"
+         placeholder="Note (optional — recorded on the audit trail)"
+         class="w-full mb-4"
+         style="background: var(--ink-mid); border-color: #475569; color: var(--text-inv);">
+  <div class="grid grid-cols-3 gap-3">
+    <div>
+      <button name="action" value="APPROVE" class="btn btn-approve w-full">approve</button>
+      <div class="text-xs mt-2" style="color: var(--ink-dim);">
+        Marks the invoice paid. A mock payment reference is issued and the invoice appears on <a href="/payments" style="color: #93c5fd;">Payments</a>.
+      </div>
+    </div>
+    <div>
+      <button name="action" value="REJECT" class="btn btn-reject w-full">reject</button>
+      <div class="text-xs mt-2" style="color: var(--ink-dim);">
+        Records the invoice as refused. No payment issued; your note explains why.
+      </div>
+    </div>
+    <div>
+      <button name="action" value="HOLD" class="btn btn-hold w-full">{% if r.is_held %}keep held{% else %}hold{% endif %}</button>
+      <div class="text-xs mt-2" style="color: var(--ink-dim);">
+        {% if r.is_held %}Nothing changes; the invoice stays on <a href="/held" style="color: #93c5fd;">Held</a>.
+        {% else %}Sets aside for later; appears on <a href="/held" style="color: #93c5fd;">Held</a> and remains actionable.
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</form>

@@ -40,49 +40,30 @@
         </div>
       </div>
 
-      <!-- Step 2: What the system found — scribe note in prose, then findings -->
-      <div class="p-6" style="border-bottom: 1px solid var(--border); background: var(--paper-alt);">
-        <div class="text-xs uppercase tracking-widest mb-2" style="color: var(--ink-mute);">What the system found</div>
-        {% if r.scribe_note %}
-          <div class="prose text-sm" style="max-width: 68ch;">{{ r.scribe_note }}</div>
-        {% else %}
-          <div class="prose text-sm" style="max-width: 68ch; color: var(--ink-mute);">{{ r.rationale }}</div>
-        {% endif %}
+      <!-- Two-column body: evidence left, recommendation + prominent button right -->
+      <div class="grid md:grid-cols-2" style="border-bottom: 1px solid var(--border);">
+        <div class="p-6" style="background: var(--paper-alt); border-right: 1px solid var(--border);">
+          <div class="text-xs uppercase tracking-widest mb-2" style="color: var(--ink-mute);">What the system found</div>
+          {% if r.scribe_note %}
+            <div class="prose text-sm" style="max-width: 60ch;">{{ r.scribe_note }}</div>
+          {% else %}
+            <div class="prose text-sm" style="max-width: 60ch; color: var(--ink-mute);">{{ r.rationale }}</div>
+          {% endif %}
+        </div>
+        <div class="p-6">
+          <div class="text-xs uppercase tracking-widest mb-2" style="color: var(--ink-mute);">System recommendation</div>
+          <div class="mb-4">
+            <span class="chip chip-escalate">ESCALATE</span>
+            <div class="text-sm mt-2" style="color: var(--ink-mid);">The system chose not to decide on its own — it needs your judgment.</div>
+          </div>
+          <a href="/invoice/{{ r.invoice_number }}" class="btn btn-primary" style="display: inline-block; text-decoration: none;">See the full analysis →</a>
+          <div class="text-xs mt-2" style="color: var(--ink-mute); max-width: 32ch;">
+            The evidence, the system's reasoning, and the critic's challenge against it.
+          </div>
+        </div>
       </div>
 
-      <!-- Step 3: What the system recommends -->
-      <div class="p-6" style="border-bottom: 1px solid var(--border);">
-        <div class="text-xs uppercase tracking-widest mb-2" style="color: var(--ink-mute);">System recommendation</div>
-        <div class="flex items-center gap-3 mb-3">
-          <span class="chip chip-escalate">ESCALATE — needs your judgment</span>
-          <span class="text-xs" style="color: var(--ink-mute);">the system chose not to decide on its own</span>
-        </div>
-        <div>
-          <a href="/invoice/{{ r.invoice_number }}" class="text-sm">See the full analysis →</a>
-          <div class="text-xs mt-1" style="color: var(--ink-mute);">the evidence, the system's reasoning, and the challenge against it</div>
-        </div>
-      </div>
-
-      <!-- Step 4: What you can do -->
-      <form method="post" action="/queue/{{ r.invoice_number }}" class="p-6">
-        <div class="text-xs uppercase tracking-widest mb-3" style="color: var(--ink-mute);">Your decision</div>
-        <input name="note" type="text" placeholder="Note (optional — recorded on the audit trail)"
-               class="w-full mb-4">
-        <div class="grid grid-cols-3 gap-3">
-          <div>
-            <button name="action" value="APPROVE" class="btn btn-approve w-full">approve</button>
-            <div class="text-xs mt-2" style="color: var(--ink-mute);">Marks the invoice paid and issues a mock payment reference.</div>
-          </div>
-          <div>
-            <button name="action" value="REJECT" class="btn btn-reject w-full">reject</button>
-            <div class="text-xs mt-2" style="color: var(--ink-mute);">Records the invoice as refused. No payment issued; your note explains why.</div>
-          </div>
-          <div>
-            <button name="action" value="HOLD" class="btn btn-hold w-full">hold</button>
-            <div class="text-xs mt-2" style="color: var(--ink-mute);">Sets aside for later. Appears on the <a href="/held">Held</a> tab; you can return and decide.</div>
-          </div>
-        </div>
-      </form>
+      {% include "_decision_block.html" %}
     </div>
     {% endfor %}
   </div>
