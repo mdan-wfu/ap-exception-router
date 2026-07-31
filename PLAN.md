@@ -162,11 +162,12 @@ Each is pure: `(Invoice, reference) -> list[Finding]`.
 - [x] Failure-path observability locked in with tests: cache-miss includes key + fix hint; circuit-breaker names cap value + prompt_name; no-decision path lands FAILED terminal_status with reason, persists to audit store when invoice present
 
 ## Phase 9 — Evaluation
-- [ ] `eval/ground_truth.yaml` — every invoice, every field, expected findings, expected decision. Derive INV-1011/1012/1013 from `generate_pdfs.py` source literals, not from reading the rendered PDFs
-- [ ] **Integrity rail:** generator source data is eval-only. It must never be reachable from the extraction path, or the accuracy numbers are fiction
-- [ ] `eval/run_eval.py` — field-level extraction accuracy, finding precision/recall, decision accuracy
-- [ ] `docs/eval-results.md` with real numbers and a named failure analysis
-- [ ] Extrapolate against Acme's baseline: 30% error rate, 5-day cycle, $2M/year
+- [x] `eval/ground_truth.yaml` — 16 invoices with expected extraction fields, must-fire / may-fire finding codes, expected-outcome sets (single- and multi-valued per the Phase 7 reconciliation)
+- [x] **Integrity rail:** generator source data is eval-only — `test_src_never_imports_eval` still passes after Phase 9
+- [x] `eval/run_eval.py` — field-level extraction accuracy, must-fire finding coverage, decision agreement; JSON summary under `runs/eval-<ts>.json`
+- [x] `make eval` regression gate — nonzero exit if any must-fire miss or any single-valued outcome divergence
+- [x] `docs/eval-results.md` — 99.2% extraction / 100% must-fire / 100% decision agreement; per-format breakdown; every miss named with one-line analysis; business extrapolation with assumptions stated
+- [x] Extrapolate against Acme's baseline: 30% error rate, 5-day cycle, $2M/year — done in eval-results.md, framed against the two loss drivers (cycle time, missed-defect cost) rather than a fantasy dollar number
 
 **Exit:** you can state "X% field accuracy, Y% decision accuracy, $Z per invoice" and defend each number.
 

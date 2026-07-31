@@ -641,3 +641,25 @@ The DP-002 finding says the two files exist. `get_prior_invoice` says no prior p
 2026-07-31
 
 ---
+
+**Decision (Phase 9 ground-truth correction):** Added `AR-004` to INV-1009's `must_fire` list. Original draft only listed `AR-002` (subtotal mismatch). AR-004 (stated_total ≠ subtotal + tax + additional_charges) also legitimately fires: subtotal=1000 stated, tax=0, additional_charges=[], expected total=1000, actual stated=-250, delta -1250.
+**Alternatives considered:** Leave the finding unlisted and treat every fire of AR-004 on INV-1009 as an "unexpected" report (the eval doesn't fail on unexpected findings, only on missing must-fires).
+**Why:** The finding is a legitimate deterministic result, not a system artifact. Suppressing it from ground truth would misrepresent what the validator suite is supposed to do on a signed-total-mismatch invoice. Recording as an oversight fix, per the Phase 9 rule that ground-truth corrections are legitimate but scoring-flattering adjustments are not.
+2026-07-31
+
+---
+
+**Decision (Phase 9 named defect):** The batch loop in `main.py` processes duplicate-pair invoices in alphabetical filename order, so INV-1011.pdf is handled before INV-1011.txt and the txt (more-complete source) is skipped. The `find_duplicates` validator emits DP-001 with a "retained" hint (based on completeness score), but the batch iterator does not consult it. Result: INV-1011's `payment_terms` field is lost (present in txt, absent in pdf).
+**Alternatives considered:** (a) Fix now — change the batch iterator to honor the retained-file recommendation. Cassette-affecting: retained-file swap would change source_file → different graph state → different cassette keys → live re-record cost of at least INV-1011 (~$0.02) plus the risk of ripple effects on INV-1012/1013 which are also duplicate pairs.
+(b) Fix in Phase 10 alongside the adversarial invoice work (which may re-record anyway).
+**Why:** The defect is real and named in `docs/eval-results.md`. The 1-of-131 extraction-field impact is scoped and honest to disclose. Fixing it inside Phase 9's zero-live-calls constraint is impossible; deferring with the defect named in the ships-with document is the correct trade.
+2026-07-31
+
+---
+
+**Decision (Phase 9 eval CORPUS is relative path):** `eval/run_eval.py` uses `CORPUS = Path("data/invoices")` (relative) not `REPO_ROOT / "data" / "invoices"` (absolute). The relative form matches what `main.py --batch` produces.
+**Alternatives considered:** Absolute path everywhere — more robust to being invoked from another cwd.
+**Why:** The audit store and `find_duplicates` key on `source_file` (which is `str(path)`); if the eval passes absolute paths and `make demo` passes relative paths, they produce different audit-store rows and different duplicate-group keys. That would break cassette replay on INV-1004 (duplicate pair) even though Phase 6 normalized the LLM-facing view. Discovered while smoke-testing `make eval` from a fresh state; the miss was at INV-1004's `adjudicator_revised` call. Constraint: any consumer of source_file that isn't the LLM prompt is coupled to the concrete path form used at record time.
+2026-07-31
+
+---
