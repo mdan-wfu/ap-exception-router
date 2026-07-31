@@ -56,8 +56,16 @@
             <span class="chip chip-escalate">ESCALATE</span>
             <div class="text-sm mt-2" style="color: var(--ink-mid);">The system chose not to decide on its own — it needs your judgment.</div>
           </div>
-          <a href="/invoice/{{ r.invoice_number }}" class="btn btn-primary" style="display: inline-block; text-decoration: none;">See the full analysis →</a>
-          <div class="text-xs mt-2" style="color: var(--ink-mute); max-width: 32ch;">
+          <a href="/invoice/{{ r.invoice_number }}"
+             class="btn btn-primary"
+             style="display: inline-flex; align-items: center; gap: 8px;
+                    text-decoration: none; padding: 12px 20px;
+                    font-size: 14px; font-weight: 700; letter-spacing: 0.02em;
+                    box-shadow: 0 1px 2px rgba(29,78,216,.25);">
+            See the full analysis
+            <span style="font-size: 18px; line-height: 1;">→</span>
+          </a>
+          <div class="text-xs mt-3" style="color: var(--ink-mute); max-width: 34ch;">
             The evidence, the system's reasoning, and the critic's challenge against it.
           </div>
         </div>
@@ -87,8 +95,8 @@
   <div class="card">
     <table class="data">
       <thead><tr>
-        <th>Invoice</th><th>System said</th><th>You said</th><th>Agreement</th>
-        {% if mixed %}<th>Source</th>{% endif %}
+        <th>Invoice</th><th>System said</th><th>Effective</th><th>Agreement</th>
+        <th>Source</th>
         <th></th>
       </tr></thead>
       <tbody>
@@ -99,19 +107,18 @@
         <td><span class="chip chip-{{ r.effective_outcome|lower }}">{{ r.effective_outcome }}</span></td>
         <td>{% if r.outcome == r.effective_outcome %}<span style="color: var(--ink-mute);">agree</span>
             {% else %}<span style="color: var(--red);">override</span>{% endif %}</td>
-        {% if mixed %}
-        <td>
-          {% if r.auto_resolved %}<span class="chip chip-auto">demo fixture</span>
-          {% else %}<span class="text-xs" style="color: var(--ink-mute);">clerk</span>{% endif %}
+        <td class="text-xs" style="color: var(--ink-mute);">
+          {% if r.source_kind == 'fixture' %}<span class="chip chip-auto">demo fixture</span>
+          {% elif r.source_kind == 'clerk' %}clerk
+          {% else %}system · straight-through{% endif %}
         </td>
-        {% endif %}
         <td class="text-right">
           <a href="/invoice/{{ r.invoice_number }}" class="text-xs mr-3">See analysis →</a>
           <button class="btn" @click="open = (open === '{{ r.invoice_number }}' ? null : '{{ r.invoice_number }}')">amend</button>
         </td>
       </tr>
       <tr x-show="open === '{{ r.invoice_number }}'" x-cloak>
-        <td colspan="{{ 6 if mixed else 5 }}" style="background: var(--paper-alt); border-bottom: 2px solid var(--border-strong);">
+        <td colspan="6" style="background: var(--paper-alt); border-bottom: 2px solid var(--border-strong);">
           <div class="p-4">
             <div class="text-xs mb-3" style="color: var(--ink-mid);">
               Amending appends a new decision. The current outcome
