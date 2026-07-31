@@ -180,16 +180,46 @@ def findings_by_prefix(corpus: str) -> list[tuple[str, str, int]]:
 # ---------------------------------------------------------------------------
 
 def get_run(invoice_number: str) -> dict[str, Any] | None:
+    """Detail-view row lookup. Includes the same derived fields
+    (effective_outcome / is_awaiting / is_held / is_resolved /
+    amendment_count / auto_resolved) that list_runs computes, so the
+    detail template can rely on them without a separate enrichment
+    pass. See DECISIONS 2026-07-31 effective-outcome-everywhere."""
+    _ensure_amendments_table()
     with _conn() as c:
         r = c.execute(
             "SELECT * FROM runs WHERE invoice_number = ? ORDER BY id DESC LIMIT 1",
             (invoice_number,),
         ).fetchone()
+        latest = c.execute("""
+            SELECT new_outcome FROM decision_amendments
+            WHERE invoice_number = ? ORDER BY id DESC LIMIT 1
+        """, (invoice_number,)).fetchone()
+        n_amend = c.execute("""
+            SELECT COUNT(*) FROM decision_amendments WHERE invoice_number = ?
+        """, (invoice_number,)).fetchone()[0]
     if r is None:
         return None
     d = dict(r)
     d["corpus"] = corpus_of(d["source_file"])
     d["nodes_fired"] = json.loads(d["nodes_fired"]) if d["nodes_fired"] else []
+    d["auto_resolved"] = _is_auto_resolved(d.get("human_note"))
+    d["amendment_count"] = n_amend
+    d["latest_amendment"] = latest["new_outcome"] if latest else None
+    d["effective_outcome"] = (
+        d["latest_amendment"] or d.get("human_outcome") or d["outcome"]
+    )
+    d["is_resolved"] = d["effective_outcome"] in ("APPROVE", "REJECT")
+    d["is_held"] = d["effective_outcome"] == "HOLD"
+    d["is_awaiting"] = (
+        d["outcome"] == "ESCALATE"
+        and d["effective_outcome"] in ("ESCALATE", None)
+    )
+    d["is_straight_through"] = (
+        d["outcome"] == "APPROVE"
+        and not d.get("human_outcome")
+        and d["amendment_count"] == 0
+    )
     return d
 
 
@@ -389,7 +419,16 @@ def record_human_decision(
     invoice_number: str, human_outcome: str, human_note: str
 ) -> None:
     """Update the run's human_outcome + human_note. Never overwrites the
-    model's decision (that stays in `outcome`), per Phase 6 policy."""
+    model's decision (that stays in `outcome`), per Phase 6 policy.
+
+    Also invokes settlement when the human decides APPROVE or REJECT — the
+    bug this fixes: dashboard actions previously wrote the decision to the
+    audit store but never triggered `mock_payment` / rejection settlement,
+    so human-approved invoices never appeared in the Payments ledger. See
+    DECISIONS 2026-07-31 dashboard-settlement-fix for why this is a direct
+    settle-invocation rather than a LangGraph checkpoint resume (graph
+    doesn't actually use interrupt() — human_gate returns synchronously
+    in every mode — so completed runs have no paused state to resume)."""
     with _conn() as c:
         c.execute("""
             UPDATE runs SET human_outcome = ?, human_note = ?
@@ -399,6 +438,57 @@ def record_human_decision(
             )
         """, (human_outcome, human_note, invoice_number))
         c.commit()
+    # Settle only for terminal decisions. HOLD leaves the run resumable —
+    # no settlement, item lands on /held for later action.
+    if human_outcome in ("APPROVE", "REJECT"):
+        _invoke_settlement(invoice_number, human_outcome, human_note)
+
+
+def _invoke_settlement(
+    invoice_number: str, effective_outcome: str, note: str,
+) -> str | None:
+    """Invoke the settle node's logic directly for a dashboard-driven human
+    decision. Reconstructs the minimal state the settle node reads, then
+    calls it. The settle node's own idempotency check (prior_paid_settlement
+    guard on invoice+vendor) prevents double-payment; this path does NOT
+    bypass it.
+
+    Returns the settle_result string, or None if the invoice cannot be
+    reconstructed (source file missing or unreadable — degrades
+    gracefully rather than 500-ing the request)."""
+    from src.nodes.settle import settle
+    from src.schema import Decision, Outcome
+
+    run = get_run(invoice_number)
+    if run is None:
+        return None
+    ext, _err = re_extract(run["source_file"])
+    if ext is None:
+        return None
+
+    # The settle node expects a Decision object. Rebuild from the run row.
+    try:
+        model_outcome = Outcome(run["outcome"])
+    except ValueError:
+        model_outcome = Outcome.ESCALATE
+    decision = Decision(
+        outcome=model_outcome,
+        rationale=run["rationale"] or "",
+        confidence=1.0,
+    )
+
+    state = {
+        "invoice": ext.invoice,
+        "decision": decision,
+        "human_outcome": effective_outcome,
+        "human_note": note,
+        "human_queued": False,
+    }
+    try:
+        result = settle(state)
+    except Exception as exc:  # pragma: no cover
+        return f"SETTLE_ERROR: {type(exc).__name__}: {exc}"
+    return result.get("settlement_result")
 
 
 def human_queue() -> list[dict[str, Any]]:
@@ -598,6 +688,18 @@ def record_amendment(
         """, (invoice_number, now, new_outcome, reason,
               prior, reversal, payment_ref))
         c.commit()
+
+    # If the amendment MAKES an invoice payable that wasn't before (e.g.
+    # REJECT → APPROVE, or HOLD → APPROVE, or ESCALATE → APPROVE with no
+    # prior PAID row), invoke settle. The settle node's idempotency check
+    # protects against firing twice; if a PAID row already exists, it
+    # refuses. If the amendment moves AWAY from APPROVE on an already-PAID
+    # row, we do NOT attempt to un-settle — the reversal flag above is the
+    # honest representation; the payment stands.
+    if new_outcome == "APPROVE" and not (prior == "APPROVE" and payment_ref):
+        _invoke_settlement(invoice_number, "APPROVE",
+                            f"amendment: {reason[:80]}")
+
     return {
         "invoice_number": invoice_number, "timestamp": now,
         "new_outcome": new_outcome, "reason": reason,
