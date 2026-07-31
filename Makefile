@@ -1,4 +1,4 @@
-.PHONY: install seed audit-reset probe demo test report dashboard
+.PHONY: install seed audit-reset probe demo test report eval dashboard
 
 install:
 	python -m venv .venv
@@ -33,6 +33,9 @@ test:
 
 report:
 	@.venv/bin/python -m scripts.report
+
+eval:
+	@LLM_MODE=replay HUMAN_GATE_MODE=demo .venv/bin/python -m eval.run_eval
 
 dashboard:
 	@echo "not yet implemented"
