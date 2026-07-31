@@ -829,3 +829,18 @@ Case (a) — not (b): no post-run correction. Prior wording in `docs/eval-result
 2026-07-31
 
 ---
+
+**Decision (upload-run-live-provider-swap):** The dashboard's "Run live" button was a no-op — the previous implementation set `os.environ["LLM_MODE"] = "auto"` before calling the graph, but `src.config.LLM_MODE` is read once at import time (via `from src.config import LLM_MODE` in `src/llm/provider.py`), so the env-var flip never reached the provider. Every "live" click hit `CacheMissError` with the safety message; the safety worked, the feature it was gating didn't.
+
+Fix (approach A, provider swap): the upload-run route now installs a fresh `LLMProvider(mode="auto")` via `set_provider(...)` for the duration of the single run, then restores the saved provider in a `finally` block. `mode="auto"` gives replay-on-hit + live-on-miss, which is what recording a new invoice needs (extractor cassette misses → live extract → write cassette; adjudicator/critic cache-miss → live → write cassette). The `finally` guarantees restoration even on crash (verified by `test_upload_run_restores_replay_even_when_graph_crashes`).
+
+Two singletons — both were swapped. `src.llm.agent_loop._provider` serves adjudicate/critic/scribe; `src.adapters.text_adapter._provider` serves the .txt/.pdf LLM extractor. Missing the second one meant extraction hit CacheMissError on the very first turn even after the agent-loop swap. Both `set_provider` / `_get_provider` pairs are called; both restored in the `finally`.
+
+Also: `src/ui/app.py` now imports `src.config` at module load so `load_dotenv()` fires at dashboard boot. Without this, `data.xai_key_configured()` read an empty `os.environ["XAI_API_KEY"]` and short-circuited every live attempt to `err=nokey` — the second layer of the same bug.
+
+**Alternatives considered:** (b) scoped env-var override + `importlib.reload(src.config)` + reload provider — reload cascades are brittle; the singleton swap is one line per singleton and works with the existing provider constructor. (c) thread `mode` through `run_one` → graph → each node — invasive across many nodes and LangGraph state; nothing else needs the flexibility.
+
+**Live verification:** clean novel invoice `INV-9101` (Widgets Inc., 4 × WidgetA @ $250 = $1,000, no findings) uploaded through dashboard, Run-live clicked, `confirm=yes`. 15-second live run, **actual cost $0.01139** (2 model calls — extractor + adjudicator, straight-through APPROVE). Settlement fired: `MOCK-3F38738411E9`. Appears in `/payments` and reachable at `/invoice/INV-9101` (both HTTP 200). Both provider singletons and `LLM_MODE` env restored to `replay` after the call.
+2026-07-31
+
+---
