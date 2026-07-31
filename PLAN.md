@@ -148,13 +148,16 @@ Each is pure: `(Invoice, reference) -> list[Finding]`.
 # DAY 2 — Make it defensible
 
 ## Phase 7 — Taxonomy and tuning
-- [ ] `docs/exception-taxonomy.md` — every code, severity, detection method, business rationale
-- [ ] Tune severities against the ground-truth table until the decision distribution matches: 5 approve / 7 reject / 5 escalate
+- [x] `docs/exception-taxonomy.md` — every code, severity, detection method, business rationale, observed-corpus behavior, distribution reconciliation
+- [x] Codes not exercised by corpus flagged honestly (AR-001, AR-003, PR-002)
+- [x] AR-004 signed-delta distinction documented with both corpus cases (INV-1013 overcharge, INV-1007 undercharge)
+- [~] Severity retuning **deferred** — severity strings are part of the LLM request fingerprint, so any change invalidates cassettes. Recorded proposals in DECISIONS 2026-07-31 Phase 7 rather than applying. Zero live spend this session by design.
+- [x] Distribution reconciliation: 4/10/2 at Adjudicator boundary → 5 PAID / 4 REJECTED / 7 HOLD after demo human gate. Every divergence from original expectation defended per-invoice.
 
 ## Phase 8 — Observability
 - [ ] Structured JSON run logs alongside `rich` output
 - [ ] Per-run cost and latency rollup
-- [ ] `make report` prints corpus-level stats: straight-through rate, exceptions by category, cost per invoice, mean latency
+- [x] `make report` prints corpus-level stats: outcome distribution, straight-through rate, queue depth, exceptions by category, cost by node type, token breakdown, per-invoice cost (pulled forward from Phase 8 into Phase 7 since audit schema was ready)
 
 ## Phase 9 — Evaluation
 - [ ] `eval/ground_truth.yaml` — every invoice, every field, expected findings, expected decision. Derive INV-1011/1012/1013 from `generate_pdfs.py` source literals, not from reading the rendered PDFs

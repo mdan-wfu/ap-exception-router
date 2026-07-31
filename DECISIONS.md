@@ -593,3 +593,37 @@ The DP-002 finding says the two files exist. `get_prior_invoice` says no prior p
 2026-07-31
 
 ---
+
+**Decision (Phase 7 severity calibration):** No severity values in `src/validators/` are changed in this phase; every proposed calibration is recorded as *deferred* below. The `docs/exception-taxonomy.md` file is updated with observed corpus behavior and a distribution reconciliation, but no code was touched.
+**Alternatives considered:** (a) adjust severities where the calibration argument is strong — TM-002 → INFO, PR-004 → INFO — and re-record only the affected invoices; (b) full severity re-tune and full corpus re-record. Both cost ~$1.10 in live API spend for the re-record.
+**Why:** The finding's severity string is emitted into the LLM message content (see `_build_context` in `src/nodes/adjudicate.py`), so severity is part of the cassette request fingerprint. Any severity change invalidates recorded cassettes regardless of whether it would flip an outcome. Under a zero-live-calls constraint this session, the only safe severity edit is one on a code that never fired — which is uninteresting. Deferring is the honest move; the recorded corpus IS the calibration evidence for what shipped.
+
+**Deferred severity adjustments** (record only, do not apply):
+- **TM-002 LOW → INFO** — fires only on INV-1016 where IN-001 HIGH was the actual driver. Never contributed to a routing decision. Defer.
+- **PR-004 LOW → INFO** — fires on INV-1003, INV-1008, INV-1016; every case had a HIGH finding present. Defer.
+- **FR-001 LOW confirmed** — fired only on INV-1003 alongside VN-001+PO-001+IN-002. Never drove alone. LOW is correct.
+- **FR-002 MEDIUM confirmed** — same case. MEDIUM appropriate.
+- **FR-003 MEDIUM confirmed** — INV-1005 co-occurred with VN-001+IN-003+PO-001. MEDIUM appropriate.
+- **PO-002 MEDIUM confirmed** — participated in escalation on INV-1008 and INV-1012 as a coincidence signal alongside stronger findings, never drove alone.
+
+**Deferred structural observations (not severity, not applied):**
+- **INV-1001 zero-findings adjudicator variance** — the recorded corpus has INV-1001 as APPROVE, but an earlier live run escalated it. A zero-findings invoice under threshold should never reach the model; a deterministic fast-path (skip adjudicate/critic/scribe entirely) would eliminate the coin-flip and cut cost/latency for the 25% of the corpus that has no findings. Defer to Phase 9 or 10 — implementing now would require re-recording (the pruned nodes would remove cassettes from the flow) and would tune against zero real signal from the current corpus.
+- **INV-1009 three CRITICALs → ESCALATE** — the model routed correctly per §2.2 (no auto-APPROVE), but a rules-based fast-path "≥2 CRITICALs of different codes → auto-REJECT" would remove one clerk touch without loss of judgment. Defer for the same reason as above.
+- **PR-002 unused** — the validator exists but no corpus invoice trips it. Taxonomy annotated. Consider adding an adversarial invoice in Phase 10 rather than removing the validator.
+2026-07-31
+
+---
+
+**Decision (Phase 7 reporting):** `make report` reads the audit store only — no API calls, no writes. Outcome distribution, straight-through rate, queue depth, exceptions by category, cost by node type (four-category token breakdown), and total cost.
+**Alternatives considered:** (a) HTML/JSON report to disk — deferred to Phase 11 dashboard, which is the intended shape; (b) include per-invoice latency — `runs.started_at` is not currently populated (only `finished_at` is), and populating it would need a graph change with cassette implications. Skipped rather than emit misleading data.
+**Why:** The audit schema already has the queryable data Phase 8 promised; pulling `make report` forward keeps demo-time visibility honest without any code that could change recorded outcomes.
+2026-07-31
+
+---
+
+**Decision (Phase 7 taxonomy edit constraint):** Any `INV-\d{4}` reference added to or removed from the **Corpus** column of `docs/exception-taxonomy.md` invalidates recorded cassettes and forces a live re-record. The `get_policy` tool regex-extracts invoice IDs from that column and returns them as `corpus_examples`, which then flows into the LLM message content on any downstream `get_policy(<code>)` tool call. Reserve INV-XXXX literals in the taxonomy for the reconciliation section (which is prose, not table rows).
+**Alternatives considered:** (a) drop `corpus_examples` from the tool return — semantic change to the tool contract, defer; (b) parse from a separate manifest file — extra plumbing.
+**Why:** Discovered during Phase 7 while annotating TM-002 with its observed corpus case (INV-1016). Adding "INV-1016" to the Corpus cell produced a fresh cassette miss on the second replay, because `get_policy(TM-002)` now returned `corpus_examples: ["INV-1016"]` where recorded cassettes had `[]`. Reverted the corpus cell to non-INV-referencing text; observation kept in the reconciliation section where the tool's regex doesn't see it.
+2026-07-31
+
+---
