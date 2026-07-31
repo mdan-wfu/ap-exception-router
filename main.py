@@ -17,6 +17,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="AP Exception Router")
     parser.add_argument("--invoice_path", help="Path to a single invoice file")
     parser.add_argument("--batch", action="store_true", help="Process the full corpus")
+    parser.add_argument("--corpus", default=str(CORPUS),
+                        help="Directory of invoices to process in batch mode "
+                             "(default: data/invoices). Adversarial set at "
+                             "data/adversarial for the authored-set eval.")
 
     mode_group = parser.add_mutually_exclusive_group()
     mode_group.add_argument("--live", action="store_true", help="Hit the real LLM API")
@@ -71,8 +75,9 @@ def main() -> None:
     from src.graph_state import GraphState
     from src.validators import find_duplicates, select_batch_retentions
 
+    corpus_dir = Path(args.corpus)
     paths = sorted(
-        p for p in CORPUS.iterdir()
+        p for p in corpus_dir.iterdir()
         if p.suffix.lower() in {".txt", ".pdf", ".json", ".csv", ".xml"}
     )
     print_batch_start(len(paths))
@@ -140,8 +145,8 @@ def main() -> None:
             "cost": float(cost),
         })
         jsonl_records.append(_record_from_state(str(path), state, elapsed))
-        print_batch_row(len(rows), 16, num, outcome, n_models, n_tools,
-                        float(cost), float(total_cost), elapsed)
+        print_batch_row(len(rows), len(retained_source_files), num, outcome,
+                        n_models, n_tools, float(cost), float(total_cost), elapsed)
 
     print_batch_summary(rows)
     _emit_jsonl(manifest, jsonl_records)

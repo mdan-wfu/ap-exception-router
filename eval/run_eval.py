@@ -39,8 +39,8 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 # the raw source_file still flows through the audit store and duplicate
 # detection — using an absolute path here produces different audit-store
 # keys than the recorded cassettes were made against.
-CORPUS = Path("data/invoices")
-GROUND_TRUTH_PATH = REPO_ROOT / "eval" / "ground_truth.yaml"
+DEFAULT_CORPUS = Path("data/invoices")
+DEFAULT_GROUND_TRUTH = REPO_ROOT / "eval" / "ground_truth.yaml"
 RESULTS_DIR = REPO_ROOT / "runs"
 
 
@@ -79,8 +79,8 @@ class InvoiceScore:
 # Ground truth loader
 # ---------------------------------------------------------------------------
 
-def load_ground_truth() -> dict[str, dict[str, Any]]:
-    with GROUND_TRUTH_PATH.open() as f:
+def load_ground_truth(path: Path | None = None) -> dict[str, dict[str, Any]]:
+    with (path or DEFAULT_GROUND_TRUTH).open() as f:
         return yaml.safe_load(f)
 
 
@@ -232,7 +232,7 @@ def _values_match(expected: Any, actual: Any) -> bool:
 # The batch runner — mirrors main.py --batch but returns terminal states
 # ---------------------------------------------------------------------------
 
-def run_corpus() -> dict[str, dict]:
+def run_corpus(corpus_dir: Path | None = None) -> dict[str, dict]:
     """Run the full corpus through the graph, return {invoice_number: state}."""
     from src.adapters.router import extract as router_extract
     from src.graph import build_graph
@@ -248,8 +248,9 @@ def run_corpus() -> dict[str, dict]:
     if ck.exists():
         ck.unlink()
 
+    corpus = corpus_dir or DEFAULT_CORPUS
     paths = sorted(
-        p for p in CORPUS.iterdir()
+        p for p in corpus.iterdir()
         if p.suffix.lower() in {".txt", ".pdf", ".json", ".csv", ".xml"}
     )
     extractions = [(p, router_extract(p)) for p in paths]
@@ -291,21 +292,30 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Corpus eval harness")
     parser.add_argument("--json-out", type=str, default=None,
                         help="Write a JSON summary to this path (default: auto in runs/)")
+    parser.add_argument("--corpus", type=str, default=None,
+                        help="Corpus directory (default: data/invoices)")
+    parser.add_argument("--ground-truth", type=str, default=None,
+                        help="Ground truth YAML (default: eval/ground_truth.yaml)")
+    parser.add_argument("--label", type=str, default="provided corpus",
+                        help="Label for the report header (e.g. "
+                             "'authored adversarial set')")
     args = parser.parse_args()
 
     os.environ.setdefault("LLM_MODE", "replay")
     os.environ.setdefault("HUMAN_GATE_MODE", "demo")
 
     console = Console(width=140)
-    console.print("[bold]Corpus eval — replay mode, zero live calls[/bold]")
+    console.print(f"[bold]Eval — {args.label} — replay mode, zero live calls[/bold]")
 
     from src.observability import build_manifest, format_manifest_lines
     manifest = build_manifest()
     for line in format_manifest_lines(manifest):
         console.print(f"[dim]{line}[/dim]")
 
-    gt = load_ground_truth()
-    states = run_corpus()
+    gt_path = Path(args.ground_truth) if args.ground_truth else None
+    corpus_dir = Path(args.corpus) if args.corpus else None
+    gt = load_ground_truth(gt_path)
+    states = run_corpus(corpus_dir)
 
     # Score each invoice
     scores: list[InvoiceScore] = []

@@ -1,4 +1,4 @@
-.PHONY: install seed audit-reset probe demo test report eval dashboard
+.PHONY: install seed audit-reset probe demo demo-adversarial test report eval eval-adversarial dashboard
 
 install:
 	python -m venv .venv
@@ -36,6 +36,19 @@ report:
 
 eval:
 	@LLM_MODE=replay HUMAN_GATE_MODE=demo .venv/bin/python -m eval.run_eval
+
+# Authored adversarial set — separate corpus, separate ground truth. Kept out
+# of `make demo` and `make eval` so the reviewer's first-run numbers are the
+# provided corpus only.
+demo-adversarial: audit-reset
+	@rm -f runs/checkpoints.sqlite
+	@LLM_MODE=replay HUMAN_GATE_MODE=demo .venv/bin/python main.py --batch --replay --corpus data/adversarial
+
+eval-adversarial:
+	@LLM_MODE=replay HUMAN_GATE_MODE=demo .venv/bin/python -m eval.run_eval \
+		--corpus data/adversarial \
+		--ground-truth eval/ground_truth_adversarial.yaml \
+		--label "authored adversarial set"
 
 dashboard:
 	@echo "not yet implemented"
