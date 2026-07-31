@@ -179,8 +179,27 @@ class LLMProvider:
             if self.mode == "replay":
                 key = self.cassette_store.compute_key(request)
                 raise CacheMissError(
-                    f"replay mode: no cassette for key {key}. "
-                    f"Run with --live (or LLM_MODE=live/auto) to record it."
+                    "This invoice has no recorded response — it has never "
+                    "been run through the LLM against the current code. "
+                    "That is the intended behavior in LLM_MODE=replay "
+                    "(the committed 16 corpus invoices + 4 authored "
+                    "adversarial invoices all replay from cassettes on "
+                    "disk with no API calls).\n"
+                    "\n"
+                    "To process a new invoice you must:\n"
+                    "  1. Put a valid xAI key in .env: XAI_API_KEY=xai-...\n"
+                    "  2. Re-run with `--live`  (e.g. "
+                    "`python main.py --invoice_path <PATH> --live`)\n"
+                    "\n"
+                    "This makes real API calls against your xAI account "
+                    "and incurs cost (typically $0.01–0.10 per invoice, "
+                    "capped by the per-invoice circuit breaker in "
+                    "src/llm/agent_loop.py). Fresh cassettes get written "
+                    "under data/cassettes/ so subsequent replay runs are "
+                    "free.\n"
+                    "\n"
+                    f"Missing cassette key (SHA-256 of the request "
+                    f"fingerprint, for debugging only): {key}"
                 )
 
         response, latency_ms = _call_with_retry(self._client, request)

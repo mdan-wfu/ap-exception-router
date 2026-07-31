@@ -45,6 +45,7 @@ def main() -> None:
     )
     from src.graph import run_one
     from src.llm.agent_loop import CircuitBreakerTripped
+    from src.llm.provider import CacheMissError
     from src.observability import (
         build_manifest, build_run_record, format_manifest_lines, write_jsonl,
     )
@@ -61,6 +62,13 @@ def main() -> None:
         except CircuitBreakerTripped as exc:
             console.print(f"[bold red]circuit breaker tripped:[/bold red] {exc}")
             raise SystemExit(1)
+        except CacheMissError as exc:
+            # A new invoice legitimately has no cassette in replay mode. Surface
+            # the friendly guidance from provider.CacheMissError without the
+            # Python traceback that LangGraph otherwise emits.
+            console.print(f"[bold yellow]replay-mode cache miss[/bold yellow]")
+            console.print(str(exc))
+            raise SystemExit(2)
         elapsed = time.perf_counter() - started
         print_single_result(args.invoice_path, state)
         _emit_jsonl(manifest, [_record_from_state(args.invoice_path, state, elapsed)])
