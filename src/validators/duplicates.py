@@ -91,18 +91,98 @@ def find(invoices: list[Invoice]) -> list[tuple[Invoice, Finding]]:
 
 
 def _pick_most_complete(group: list[Invoice]) -> tuple[Invoice, list[Invoice]]:
-    """Prefer the record with more non-null fields; tie-break on line-item count."""
-    def score(inv: Invoice) -> tuple[int, int]:
+    """Prefer the record with more non-null fields; tie-break on line-item count,
+    then on source_file basename alphabetically so the result is stable across
+    input orderings (critical: the batch orchestrator relies on this to be
+    deterministic regardless of which file it read first)."""
+    def score(inv: Invoice) -> tuple[int, int, str]:
         completeness = sum([
             inv.stated_subtotal is not None,
             inv.stated_tax is not None,
             inv.payment_terms is not None,
             inv.vendor_address is not None,
         ])
-        return (completeness, len(inv.line_items))
+        # Negate the basename comparator so higher-completeness AND earlier
+        # basename both sort "greater" under reverse=True. Store the negated
+        # form as a string trick — Python can't negate strs, so wrap in a
+        # comparator via ordering: emit basename as the third field and rely
+        # on reverse=True flipping "later alphabetical" into "greater",
+        # then reverse the alphabetical fallback below.
+        return (completeness, len(inv.line_items), Path(inv.source_file).name)
 
-    ranked = sorted(group, key=score, reverse=True)
+    # Primary: completeness DESC, line_items DESC — use reverse=True.
+    # But the alphabetical tie-break must go ASCENDING (a < b picks a).
+    # Two-phase sort: sort alphabetically ascending first (stable),
+    # then sort by (completeness, line_items) DESC (stable). Stable sort
+    # preserves the alphabetical order among equal-completeness entries.
+    by_name = sorted(group, key=lambda i: Path(i.source_file).name)
+    ranked = sorted(
+        by_name,
+        key=lambda i: (
+            sum([
+                i.stated_subtotal is not None,
+                i.stated_tax is not None,
+                i.payment_terms is not None,
+                i.vendor_address is not None,
+            ]),
+            len(i.line_items),
+        ),
+        reverse=True,
+    )
     return ranked[0], ranked[1:]
+
+
+def pick_retained(group: list[Invoice]) -> Invoice:
+    """Return the invoice to keep from a DP-001-style group (all members
+    share a semantic_hash — same invoice, multiple files). Uses the
+    completeness rule with a stable alphabetical basename tie-break.
+
+    NOT valid for DP-002 groups (differing semantic_hash — genuinely
+    different submissions under the same number). Use
+    `select_batch_retentions` at the orchestrator boundary instead of
+    calling `pick_retained` directly on mixed-hash groups."""
+    if len(group) == 1:
+        return group[0]
+    chosen, _ = _pick_most_complete(group)
+    return chosen
+
+
+def select_batch_retentions(invoices: list[Invoice]) -> set[str]:
+    """Return the set of `source_file` values a batch orchestrator should
+    actually process. Encodes the collapse rule for duplicate groups:
+
+      - singleton group (no duplicate): keep it
+      - matching-semantic-hash group (DP-001): keep the most-complete member
+        via `pick_retained`
+      - differing-semantic-hash group (DP-002): keep the alphabetically-first
+        source_file. The batch loop must NEVER auto-pick between genuinely
+        different submissions — that is the human gate's decision. The
+        alphabetical choice is deliberately dumb; it preserves whichever
+        submission was first-cataloged and defers the "which is authoritative"
+        question to the Adjudicator's DP-002 finding + human resolution.
+
+    The near-miss this scoping prevents: an earlier version of this fix used
+    `pick_retained` unconditionally and would have swapped INV-1004's
+    original for its revised submission because the revision has more line
+    items. See DECISIONS 2026-07-31 duplicate-selection fix."""
+    from collections import defaultdict as _dd
+    by_number: dict[str, list[Invoice]] = _dd(list)
+    for inv in invoices:
+        by_number[inv.invoice_number].append(inv)
+
+    retained: set[str] = set()
+    for group in by_number.values():
+        if len(group) == 1:
+            retained.add(group[0].source_file)
+            continue
+        hashes = {inv.semantic_hash for inv in group}
+        if len(hashes) == 1:
+            retained.add(pick_retained(group).source_file)
+        else:
+            # DP-002 semantics: keep first alphabetically, do not collapse.
+            first = sorted(group, key=lambda i: Path(i.source_file).name)[0]
+            retained.add(first.source_file)
+    return retained
 
 
 def _completeness_reason(chosen: Invoice, group: list[Invoice]) -> str:
