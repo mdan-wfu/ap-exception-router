@@ -3,62 +3,125 @@
 {% block content %}
 
 <div class="mb-8 text-center">
-  <div class="text-xs uppercase tracking-widest" style="color: var(--text-dim);">Reviewer path</div>
-  <h1 class="display display-bold text-4xl mt-2">Add invoice</h1>
-  <p class="mt-2 max-w-2xl mx-auto text-sm" style="color: var(--text-mute);">
-    Upload a novel invoice and — with a configured key — run it live from the UI. This is the single explicit dashboard path that can incur cost. Everything else is read-only.
+  <h1 class="display display-bold text-4xl">Add invoice</h1>
+  <p class="mt-3 max-w-2xl mx-auto text-sm" style="color: var(--ink-mute);">
+    Upload an invoice the system has never seen. If a live API key is configured, you can process it here.
   </p>
 </div>
 
-<div class="panel panel-body mb-8">
-  {% if key_configured %}
-    <div class="text-xs uppercase tracking-wider mb-2" style="color: var(--green);">✓ XAI_API_KEY configured</div>
-    <div class="text-sm" style="color: var(--text-mute);">The Run live button on the next page will use this key. Expect $0.01–0.10 per invoice.</div>
-  {% else %}
-    <div class="text-xs uppercase tracking-wider mb-2" style="color: var(--amber);">✕ XAI_API_KEY not configured</div>
-    <div class="text-sm" style="color: var(--text-mute);">Uploads are still saved. To process one, add <span class="mono">XAI_API_KEY=xai-...</span> to <span class="mono">.env</span> and re-run from the CLI (the command will be shown on the next page).</div>
-  {% endif %}
-</div>
+<div class="grid grid-cols-3 gap-6">
+  <div class="col-span-2 space-y-4">
 
-<div class="grid grid-cols-2 gap-6 mb-8">
-  <div class="panel">
-    <div class="panel-header"><h3 class="display text-base">Upload a file</h3></div>
-    <div class="panel-body">
-      <form method="post" action="/upload" enctype="multipart/form-data" class="space-y-3">
-        <input type="file" name="file" accept=".txt,.pdf,.json,.csv,.xml" required>
-        <div><button class="btn" type="submit">upload</button></div>
-      </form>
-      <div class="text-xs mt-3" style="color: var(--text-dim);">
-        Accepted: <span class="mono">.txt .pdf .json .csv .xml</span>. Saved to <span class="mono">data/uploads/</span> (gitignored).
+    <div class="card">
+      <div class="card-header flex items-center gap-3">
+        <span class="step-num">1</span>
+        <h3 class="display text-lg">Choose a file</h3>
+      </div>
+      <div class="card-body">
+        <p class="text-sm mb-4" style="color: var(--ink-mute);">
+          Accepted formats: <span class="mono">.txt .csv .json .xml .pdf</span>.
+          The invoice can be anything — the system has no memory of a new file until it processes it.
+        </p>
+        <form method="post" action="/upload" enctype="multipart/form-data" class="space-y-3">
+          <input type="file" name="file" accept=".txt,.pdf,.json,.csv,.xml" required>
+          <div><button class="btn" type="submit">upload file</button></div>
+        </form>
+        <div class="rule my-6"></div>
+        <div class="text-xs mb-2" style="color: var(--ink-mute);">Or paste text directly:</div>
+        <form method="post" action="/upload" class="space-y-3">
+          <input type="text" name="pasted_name" placeholder="filename (default: pasted_invoice.txt)" class="w-full">
+          <textarea name="pasted" rows="6" class="w-full" placeholder="Paste invoice text here…"></textarea>
+          <div><button class="btn" type="submit">save pasted text</button></div>
+        </form>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header flex items-center gap-3">
+        <span class="step-num">2</span>
+        <h3 class="display text-lg">What happens next</h3>
+      </div>
+      <div class="card-body">
+        {% if key_configured %}
+          <div class="prose text-sm" style="max-width: 60ch;">
+            After upload you'll see a preview and a <strong style="color: var(--red);">Run live</strong> button.
+            Clicking it makes one real API call against your xAI account, costing roughly
+            <span class="mono">$0.01–0.10</span>. Nothing runs until you confirm — the button
+            opens a browser confirmation dialog first.
+          </div>
+        {% else %}
+          <div class="prose text-sm" style="max-width: 60ch;">
+            No API key is configured yet, so the dashboard can't process a new invoice.
+            You can still upload — after saving we'll show the exact command to paste into your
+            terminal, along with a note on why a new invoice needs a live call.
+          </div>
+        {% endif %}
+        <div class="mt-4 text-xs italic" style="color: var(--ink-mute); max-width: 60ch;">
+          Why a live call? The system replays recorded responses for the 20 invoices it has seen before, at zero cost. A new invoice has no recording, so the model has to actually run once.
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header flex items-center gap-3">
+        <span class="step-num">3</span>
+        <h3 class="display text-lg">Confirm and run</h3>
+      </div>
+      <div class="card-body">
+        <p class="text-sm" style="color: var(--ink-mute);">
+          Available on the file's page after upload. Requires an affirmative click AND a browser confirm dialog — the dashboard cannot incur cost any other way.
+        </p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header flex items-center gap-3">
+        <span class="step-num">4</span>
+        <h3 class="display text-lg">Result</h3>
+      </div>
+      <div class="card-body">
+        <p class="text-sm" style="color: var(--ink-mute);">
+          On success, you'll land on the invoice's detail page — same view every other invoice uses.
+          On failure, you'll see a plain-English explanation and the CLI command as a fallback.
+        </p>
       </div>
     </div>
   </div>
 
-  <div class="panel">
-    <div class="panel-header"><h3 class="display text-base">Or paste text</h3></div>
-    <div class="panel-body">
-      <form method="post" action="/upload" class="space-y-3">
-        <input type="text" name="pasted_name" placeholder="filename (default: pasted_invoice.txt)" class="w-full">
-        <textarea name="pasted" rows="10" class="w-full" placeholder="Paste invoice text here…"></textarea>
-        <div><button class="btn" type="submit">save</button></div>
-      </form>
+  <div class="space-y-4">
+    <div class="card p-6">
+      <div class="text-xs uppercase tracking-widest mb-2" style="color: var(--ink-mute);">API key</div>
+      {% if key_configured %}
+        <div class="text-sm" style="color: var(--green);">✓ Configured — live runs available</div>
+        <div class="text-xs mt-2" style="color: var(--ink-mute);">
+          Cost per invoice: <span class="mono">~$0.01–0.10</span>.
+        </div>
+      {% else %}
+        <div class="text-sm" style="color: var(--amber);">✕ Not configured — uploads save only</div>
+        <div class="text-xs mt-2" style="color: var(--ink-mute);">
+          Add <span class="mono">XAI_API_KEY=xai-...</span> to your <span class="mono">.env</span> and restart the dashboard.
+        </div>
+      {% endif %}
     </div>
+
+    {% if recent_uploads %}
+    <div class="card">
+      <div class="card-header"><h3 class="display text-base">Uploaded files</h3></div>
+      <ul class="p-4 text-sm space-y-2">
+        {% for u in recent_uploads %}
+        <li class="flex justify-between">
+          <a class="mono" href="/upload/{{ u.name }}">{{ u.name }}</a>
+          <span class="mono text-xs" style="color: var(--ink-mute);">{{ u.size }} B</span>
+        </li>
+        {% endfor %}
+      </ul>
+    </div>
+    {% else %}
+    <div class="card p-4 text-xs text-center" style="color: var(--ink-mute);">
+      No uploads yet. Files saved via step 1 will appear here.
+    </div>
+    {% endif %}
   </div>
 </div>
-
-{% if recent_uploads %}
-<section class="panel">
-  <div class="panel-header"><h3 class="display text-base">Uploaded files</h3></div>
-  <table class="data">
-    <thead><tr><th>Name</th><th class="text-right">Size</th></tr></thead>
-    <tbody>
-      {% for u in recent_uploads %}
-      <tr><td><a class="mono" href="/upload/{{ u.name }}">{{ u.name }}</a></td>
-          <td class="text-right mono">{{ u.size }} B</td></tr>
-      {% endfor %}
-    </tbody>
-  </table>
-</section>
-{% endif %}
 
 {% endblock %}

@@ -10,85 +10,106 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
-  /* Dark surface, internal-financial-tool aesthetic. CLAUDE.md §3b:
-     slate-900 primary, blue accent for interactive elements only,
-     amber for warnings. Playfair for hero numerics + section titles,
-     Georgia for prose, system sans for UI chrome. */
+  /* Light-primary surface, dark for header / hero panels / section
+     headers only. Blue-700 for interactive elements; amber for
+     attention; red reserved for genuinely destructive states. */
   :root {
-    --ink-0: #020617;    /* deepest — page bg */
-    --ink-1: #0f172a;    /* slate-900 — surface bg */
-    --ink-2: #1e293b;    /* slate-800 — cards */
-    --ink-3: #334155;    /* slate-700 — subtle borders */
-    --ink-4: #475569;    /* slate-600 — muted borders */
-    --text: #e2e8f0;
-    --text-mute: #94a3b8;
-    --text-dim: #64748b;
-    --accent: #3b82f6;   /* blue-500 — interactive */
-    --accent-hi: #60a5fa;
-    --amber: #f59e0b;
-    --amber-dim: #78350f;
-    --green: #10b981;
-    --green-dim: #064e3b;
-    --red: #ef4444;
-    --red-dim: #7f1d1d;
-    --violet: #a78bfa;
+    --page: #f8fafc;         /* slate-50 — page background */
+    --paper: #ffffff;        /* cards */
+    --paper-alt: #f1f5f9;    /* subtle emphasis / zebra */
+    --border: #e2e8f0;       /* slate-200 — most borders */
+    --border-strong: #cbd5e1;/* slate-300 */
+    --ink-dark: #0f172a;     /* slate-900 — dark panels bg + strong text */
+    --ink-mid: #334155;      /* slate-700 — headings */
+    --ink-mute: #64748b;     /* slate-500 — meta */
+    --ink-dim: #94a3b8;      /* slate-400 — labels on dark surfaces */
+    --text: #0f172a;
+    --text-inv: #f1f5f9;     /* text on dark panels */
+
+    --accent: #1d4ed8;       /* blue-700 — interactive */
+    --accent-hi: #1e40af;
+    --accent-soft: #dbeafe;
+    --amber: #b45309;        /* amber-700 — attention */
+    --amber-soft: #fef3c7;
+    --green: #15803d;
+    --green-soft: #dcfce7;
+    --red: #b91c1c;          /* red-700 — destructive / high-stakes */
+    --red-soft: #fee2e2;
+    --violet: #6d28d9;
+    --violet-soft: #ede9fe;
   }
   html, body {
-    background: var(--ink-0);
+    background: var(--page);
     color: var(--text);
     font-feature-settings: "cv02","cv03","cv04","cv11";
   }
   body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 14px; }
   .display { font-family: "Playfair Display", Georgia, serif; letter-spacing: -0.015em; font-weight: 500; }
-  .display-bold { font-weight: 700; }
-  .prose { font-family: Georgia, "Times New Roman", serif; line-height: 1.7; color: var(--text); }
+  .display-bold { font-family: "Playfair Display", Georgia, serif; letter-spacing: -0.02em; font-weight: 700; }
+  .prose { font-family: Georgia, "Times New Roman", serif; line-height: 1.7; }
   .mono, code { font-family: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
 
-  /* Panels — darker, real borders, no floating shadow. */
-  .panel { background: var(--ink-1); border: 1px solid var(--ink-3); border-radius: 4px; }
-  .panel-strong { border-color: var(--ink-4); }
-  .panel-header { border-bottom: 1px solid var(--ink-3); padding: 14px 20px; }
+  /* Light card = the default surface */
+  .card { background: var(--paper); border: 1px solid var(--border); border-radius: 6px; }
+  .card-header { border-bottom: 1px solid var(--border); padding: 14px 20px; }
+  .card-body { padding: 20px; }
+  .rule { border-top: 1px solid var(--border); }
+
+  /* Legacy aliases so pre-existing markup in detail.html / duplicate.html
+     renders under the light theme without a bulk find-replace. */
+  .panel { background: var(--paper); border: 1px solid var(--border); border-radius: 6px; }
+  .panel-header { border-bottom: 1px solid var(--border); padding: 14px 20px; }
   .panel-body { padding: 20px; }
-  .rule { border-top: 1px solid var(--ink-3); }
+
+  /* Dark panel = emphasis only. Hero metrics, section headers. */
+  .dark-panel {
+    background: var(--ink-dark);
+    color: var(--text-inv);
+    border-radius: 6px;
+    border: 1px solid var(--ink-dark);
+  }
+  .dark-panel .display, .dark-panel h1, .dark-panel h2, .dark-panel h3 { color: var(--text-inv); }
+  .dark-panel .meta { color: var(--ink-dim); }
 
   /* Chips */
   .chip { display: inline-block; padding: 3px 10px; border-radius: 3px; font-size: 10.5px;
-          font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; border: 1px solid transparent; }
-  .chip-approve  { color: var(--green); border-color: var(--green-dim); background: rgba(16,185,129,.08); }
-  .chip-reject   { color: var(--red);   border-color: var(--red-dim);   background: rgba(239,68,68,.08); }
-  .chip-escalate { color: var(--amber); border-color: var(--amber-dim); background: rgba(245,158,11,.08); }
-  .chip-hold     { color: var(--violet); border-color: #4c1d95;        background: rgba(167,139,250,.08); }
-  .chip-info     { color: var(--accent); border-color: #1e3a8a;        background: rgba(59,130,246,.08); }
-  .chip-critical { color: var(--red); border-color: var(--red); background: rgba(239,68,68,.12); }
-  .chip-high     { color: var(--amber); border-color: var(--amber); background: rgba(245,158,11,.08); }
-  .chip-medium   { color: #fbbf24; border-color: #78350f; background: rgba(251,191,36,.06); }
-  .chip-low      { color: var(--text-mute); border-color: var(--ink-4); background: transparent; }
-  .chip-provided { color: var(--accent); border-color: #1e3a8a; background: rgba(59,130,246,.06); }
-  .chip-adversarial { color: #f472b6; border-color: #831843; background: rgba(244,114,182,.06); }
-  .chip-auto     { color: var(--text-mute); border-color: var(--ink-3); background: rgba(148,163,184,.06); font-style: italic; }
-  .chip-amended  { color: var(--violet); border-color: #4c1d95; background: rgba(167,139,250,.10); }
+          font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; border: 1px solid transparent; white-space: nowrap; }
+  .chip-approve  { color: var(--green);  border-color: #86efac; background: var(--green-soft); }
+  .chip-reject   { color: var(--red);    border-color: #fca5a5; background: var(--red-soft); }
+  .chip-escalate { color: var(--amber);  border-color: #fcd34d; background: var(--amber-soft); }
+  .chip-hold     { color: var(--violet); border-color: #c4b5fd; background: var(--violet-soft); }
+  .chip-info     { color: var(--accent); border-color: #93c5fd; background: var(--accent-soft); }
+  .chip-critical { color: var(--red);    border-color: var(--red); background: var(--red-soft); }
+  .chip-high     { color: var(--amber);  border-color: var(--amber); background: var(--amber-soft); }
+  .chip-medium   { color: #a16207; border-color: #fcd34d; background: #fef9c3; }
+  .chip-low      { color: var(--ink-mute); border-color: var(--border-strong); background: var(--paper-alt); }
+  .chip-provided { color: var(--accent); border-color: #bfdbfe; background: var(--accent-soft); }
+  .chip-adversarial { color: #9d174d; border-color: #fbcfe8; background: #fce7f3; }
+  .chip-auto     { color: var(--ink-mute); border-color: var(--border-strong); background: var(--paper-alt); font-style: italic; }
+  .chip-amended  { color: var(--violet); border-color: #c4b5fd; background: var(--violet-soft); }
 
-  /* Links */
   a { color: var(--accent); text-decoration: none; }
   a:hover { color: var(--accent-hi); text-decoration: underline; text-underline-offset: 3px; }
 
-  /* Nav */
-  .nav-tab { padding: 10px 4px; color: var(--text-mute); font-size: 13px;
-             border-bottom: 2px solid transparent; transition: border-color 120ms, color 120ms; text-decoration: none; }
-  .nav-tab:hover { color: var(--text); text-decoration: none; }
-  .nav-tab.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+  /* Nav — dark top bar */
+  .top { background: var(--ink-dark); color: var(--text-inv); border-bottom: 1px solid #1e293b; }
+  .top a { color: var(--text-inv); }
+  .nav-tab { padding: 10px 4px; color: var(--ink-dim); font-size: 13px; border-bottom: 2px solid transparent;
+             transition: border-color 120ms, color 120ms; text-decoration: none; }
+  .nav-tab:hover { color: var(--text-inv); text-decoration: none; }
+  .nav-tab.active { color: var(--text-inv); border-bottom-color: #60a5fa; font-weight: 600; }
 
   /* Tables */
   table.data { width: 100%; font-size: 13px; }
-  table.data thead th { text-align: left; color: var(--text-dim); text-transform: uppercase;
+  table.data thead th { text-align: left; color: var(--ink-mute); text-transform: uppercase;
                         font-size: 10.5px; letter-spacing: 0.06em; font-weight: 600;
-                        padding: 10px 20px; border-bottom: 1px solid var(--ink-3); }
-  table.data tbody td { padding: 12px 20px; border-bottom: 1px solid var(--ink-2); }
-  table.data tbody tr:hover { background: rgba(59,130,246,.04); }
+                        padding: 10px 20px; border-bottom: 1px solid var(--border); background: var(--paper-alt); }
+  table.data tbody td { padding: 12px 20px; border-bottom: 1px solid var(--border); }
+  table.data tbody tr:hover { background: var(--paper-alt); }
 
   /* Forms */
   input[type=text], input[type=file], textarea, select {
-    background: var(--ink-2); border: 1px solid var(--ink-3); color: var(--text);
+    background: var(--paper); border: 1px solid var(--border-strong); color: var(--text);
     padding: 8px 10px; border-radius: 3px; font-size: 13px;
   }
   input[type=text]:focus, textarea:focus, select:focus {
@@ -96,29 +117,48 @@
   }
   button.btn {
     padding: 8px 14px; border-radius: 3px; font-size: 12px; font-weight: 600; letter-spacing: 0.02em;
-    border: 1px solid var(--ink-3); background: var(--ink-2); color: var(--text); cursor: pointer;
+    border: 1px solid var(--border-strong); background: var(--paper); color: var(--text); cursor: pointer;
     transition: border-color 120ms, background 120ms;
   }
-  button.btn:hover { border-color: var(--accent); background: rgba(59,130,246,.08); }
-  button.btn-approve { color: var(--green); border-color: var(--green-dim); }
-  button.btn-approve:hover { background: rgba(16,185,129,.12); border-color: var(--green); }
-  button.btn-reject  { color: var(--red);   border-color: var(--red-dim); }
-  button.btn-reject:hover { background: rgba(239,68,68,.12); border-color: var(--red); }
-  button.btn-hold    { color: var(--violet); border-color: #4c1d95; }
-  button.btn-hold:hover { background: rgba(167,139,250,.12); border-color: var(--violet); }
-  button.btn-danger  { color: var(--red); border-color: var(--red-dim); }
-  button.btn-danger:hover { background: rgba(239,68,68,.10); border-color: var(--red); }
+  button.btn:hover { border-color: var(--accent); background: var(--accent-soft); }
+  button.btn-primary { background: var(--accent); color: white; border-color: var(--accent); }
+  button.btn-primary:hover { background: var(--accent-hi); border-color: var(--accent-hi); }
+  button.btn-approve { color: var(--green); border-color: #86efac; background: var(--green-soft); }
+  button.btn-approve:hover { background: #bbf7d0; border-color: var(--green); }
+  button.btn-reject  { color: var(--red);   border-color: #fca5a5; background: var(--red-soft); }
+  button.btn-reject:hover { background: #fecaca; border-color: var(--red); }
+  button.btn-hold    { color: var(--violet); border-color: #c4b5fd; background: var(--violet-soft); }
+  button.btn-hold:hover { background: #ddd6fe; border-color: var(--violet); }
+  button.btn-danger  { color: white; background: var(--red); border-color: var(--red); }
+  button.btn-danger:hover { background: #991b1b; border-color: #991b1b; }
 
-  .code-panel { background: var(--ink-0); color: var(--text); border: 1px solid var(--ink-3); border-radius: 3px; }
+  /* Source code panel — keep dark for contrast */
+  .code-panel { background: #0f172a; color: #e2e8f0; border: 1px solid #1e293b; border-radius: 3px; }
+
+  /* Guided-step tags */
+  .step-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--ink-dark); color: white;
+    font-family: "Playfair Display", Georgia, serif; font-weight: 700; font-size: 15px;
+  }
+
+  /* Amount hero — used on Human Review */
+  .amount-hero {
+    font-family: "Playfair Display", Georgia, serif; font-weight: 700;
+    font-size: 42px; letter-spacing: -0.03em; line-height: 1;
+    color: var(--ink-dark);
+  }
+
   [x-cloak] { display: none !important; }
 </style>
 </head>
 <body>
-<header style="border-bottom: 1px solid var(--ink-3); background: var(--ink-1);">
-  <div class="max-w-7xl mx-auto px-8 py-5 flex items-baseline justify-between">
+<header class="top">
+  <div class="max-w-7xl mx-auto px-8 py-4 flex items-baseline justify-between">
     <div>
-      <a href="/" class="display display-bold text-2xl" style="color: var(--text);">AP Exception Router</a>
-      <span class="ml-3 text-xs" style="color: var(--text-dim);">Acme Corp · post-run audit view</span>
+      <a href="/" class="display display-bold text-2xl">AP Exception Router</a>
+      <span class="ml-3 text-xs meta">Acme Corp · post-run audit view</span>
     </div>
     <nav class="flex items-center gap-6">
       {% set active = active_nav|default('queue') %}
@@ -131,11 +171,24 @@
   </div>
 </header>
 
+{% if demo_mode %}
+<div x-data="{ show: true }" x-show="show" x-cloak
+     style="background: var(--amber-soft); border-bottom: 1px solid #fcd34d; color: var(--amber);">
+  <div class="max-w-7xl mx-auto px-8 py-2.5 flex items-center gap-3 text-sm">
+    <strong style="letter-spacing: 0.02em;">Demo mode</strong>
+    <span style="color: var(--ink-mid);">
+      Escalations below were auto-resolved from a fixture. No human review has actually occurred.
+    </span>
+    <button @click="show = false" class="ml-auto text-xs" style="color: var(--ink-mute);" title="dismiss">✕</button>
+  </div>
+</div>
+{% endif %}
+
 <main class="max-w-7xl mx-auto px-8 py-10">
 {% block content %}{% endblock %}
 </main>
 
-<footer class="max-w-7xl mx-auto px-8 py-8 mt-16" style="border-top: 1px solid var(--ink-3); color: var(--text-dim);">
+<footer class="max-w-7xl mx-auto px-8 py-8 mt-16" style="border-top: 1px solid var(--border); color: var(--ink-mute);">
   <div class="flex items-center justify-between text-xs">
     <span>Reads runs/audit.sqlite. Zero API calls at page load. LLM_MODE=replay forced.</span>
     <span class="mono">grok-4.5</span>

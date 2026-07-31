@@ -144,26 +144,43 @@
   {% else %}<p class="p-6 text-sm" style="color: var(--text-mute);">No findings — clean invoice.</p>{% endif %}
 </section>
 
-<!-- 3. Adjudicator rationale -->
-<section class="panel mb-4">
-  <div class="panel-header flex items-baseline gap-3">
-    <h3 class="display text-base">Adjudicator</h3>
-    {% if run.revision_occurred %}<span class="chip chip-info">revised after critic</span>
-    {% elif run.critic_challenge %}<span class="chip chip-info">held after critic</span>{% endif %}
-  </div>
-  <div class="panel-body prose">{{ run.rationale or "(no rationale recorded)" }}</div>
-</section>
+<!-- 3 + 4: Adjudicator ⟷ Critic as a dialogue, side by side. -->
+<div class="grid md:grid-cols-2 gap-4 mb-4">
+  <section class="card">
+    <div class="card-header flex items-baseline gap-3">
+      <h3 class="display text-base">Adjudicator</h3>
+      <span class="text-xs" style="color: var(--ink-mute);">the system's reasoning</span>
+    </div>
+    <div class="card-body prose text-sm">{{ run.rationale or "(no rationale recorded)" }}</div>
+  </section>
+  {% if run.critic_challenge %}
+  <section class="card" style="background: var(--amber-soft); border-color: #fcd34d;">
+    <div class="card-header flex items-baseline gap-3" style="border-bottom-color: #fcd34d;">
+      <h3 class="display text-base" style="color: var(--amber);">Critic</h3>
+      <span class="text-xs" style="color: var(--ink-mid);">the opposing argument</span>
+    </div>
+    <div class="card-body prose text-sm">{{ run.critic_challenge }}</div>
+  </section>
+  {% else %}
+  <section class="card" style="background: var(--paper-alt); border-style: dashed;">
+    <div class="card-header"><h3 class="display text-base" style="color: var(--ink-mute);">Critic</h3></div>
+    <div class="card-body text-sm" style="color: var(--ink-mute);">The critic didn't fire on this invoice — it only runs when the amount is over threshold or a finding is at least HIGH severity. That's normal for a simpler case.</div>
+  </section>
+  {% endif %}
+</div>
 
-<!-- 4. Critic challenge — visually distinct as the opposing argument -->
+<!-- Resolution strip: what the exchange resolved to -->
 {% if run.critic_challenge %}
-<section class="panel mb-4" style="background: rgba(245,158,11,.04); border-color: var(--amber-dim);">
-  <div class="panel-header flex items-baseline gap-3" style="border-bottom-color: var(--amber-dim);">
-    <h3 class="display text-base" style="color: var(--amber);">Critic</h3>
-    <span class="text-xs" style="color: var(--text-mute);">the opposing argument</span>
+<section class="mb-6 p-4 text-center" style="background: var(--paper-alt); border: 1px solid var(--border); border-radius: 6px;">
+  <div class="text-sm">
+    {% if run.revision_occurred %}
+      <span class="display text-base">Adjudicator revised its decision after the critic challenge.</span>
+    {% else %}
+      <span class="display text-base">Adjudicator held its position after the critic challenge.</span>
+    {% endif %}
   </div>
-  <div class="panel-body prose">{{ run.critic_challenge }}</div>
-  <div class="panel-body pt-0 text-xs" style="color: var(--text-mute);">
-    Held-position is a legitimate outcome. The Adjudicator {{ "revised" if run.revision_occurred else "considered and held" }} after this challenge.
+  <div class="text-xs mt-2" style="color: var(--ink-mute);">
+    Holding is a legitimate outcome — the two are not required to agree. The Adjudicator reads the challenge and decides whether it changes the picture.
   </div>
 </section>
 {% endif %}
