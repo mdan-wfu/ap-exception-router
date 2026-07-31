@@ -24,7 +24,7 @@ probe:
 # mode — the reviewer must see identical output on every invocation. Without
 # the rm, a second `make demo` resumes from the first run's terminal state
 # and produces different (or truncated) output.
-demo: audit-reset
+demo: seed audit-reset
 	@rm -f runs/checkpoints.sqlite
 	LLM_MODE=replay HUMAN_GATE_MODE=demo .venv/bin/python main.py --batch --replay
 
