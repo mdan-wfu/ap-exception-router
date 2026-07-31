@@ -1,0 +1,45 @@
+{
+  "content": "{\n  \"note\": \"Vendor Fraudster LLC is absent from the master with no prior history; sole line item FakeItem is inactive at zero stock on a $100,000 total. Reject and do not pay.\"\n}",
+  "fingerprint": {
+    "messages": [
+      {
+        "content": "# Scribe\n\nWrite a one-paragraph exception note for the AP clerk who will act on this invoice.\n\n## Register\n\nSpecific. Factual. No hedging. No \"based on the analysis\". No restating the finding list. It should read like a competent colleague's handoff note.\n\nModel:\n\n> *Line 3 requests 20 GadgetX; 5 in stock. Vendor has no prior orders. Recommend hold pending vendor confirmation.*\n\nNotes on the model:\n- Concrete numbers, not adjectives (\"20 GadgetX; 5 in stock\", not \"large quantity\").\n- One or two sentences.\n- Names the action the clerk should consider.\n- No mention of finding codes, severity levels, or system internals.\n\n## What you MUST NOT do\n\n- Restate the findings list.\n- Quote the Adjudicator's rationale.\n- Use words like \"critical\", \"flagged\", \"detected\", \"raised\". The clerk knows there is a finding; they need to know what to do next.\n- Use severity vocabulary (`HIGH`, `MEDIUM`, etc.).\n- Write more than three sentences.\n\n## Your output\n\n```\n{\n  \"note\": \"<one to three sentences, plain English>\"\n}\n```\n\n## The invoice, findings, and adjudicator decision\n\n### Invoice\n{\n  \"invoice_number\": \"INV-1003\",\n  \"invoice_number_raw\": \"INV-1003\",\n  \"vendor_name\": \"Fraudster LLC\",\n  \"vendor_raw\": \"Fraudster LLC\",\n  \"vendor_claims\": [],\n  \"vendor_address\": null,\n  \"vendor_email\": null,\n  \"invoice_date\": \"2026-01-20\",\n  \"date_raw\": \"2026-01-20\",\n  \"due_date\": null,\n  \"due_date_raw\": \"yesterday\",\n  \"payment_terms\": \"Immediate\",\n  \"references\": [],\n  \"notes\": \"URGENT - Pay immediately to avoid penalties!!! Wire transfer preferred.\",\n  \"line_items\": [\n    {\n      \"raw_item_name\": \"FakeItem\",\n      \"canonical_item\": \"FakeItem\",\n      \"quantity\": 100,\n      \"unit_price_usd\": \"1000.0\",\n      \"unit_price_native\": \"1000.0 USD\",\n      \"line_amount_usd\": null,\n      \"note\": null\n    }\n  ],\n  \"additional_charges\": [],\n  \"stated_subtotal_usd\": null,\n  \"stated_tax_usd\": null,\n  \"stated_total_usd\": \"100000.0\",\n  \"currency\": \"USD\",\n  \"source_file\": \"invoice_1003.txt\",\n  \"source_format\": \"txt\",\n  \"corrections\": []\n}\n\n### Findings\n- IN-002 [HIGH] Item FakeItem is inactive with zero stock\n- PR-004 [LOW] No reference unit price for FakeItem\n- VN-001 [HIGH] Vendor 'Fraudster LLC' is not in the master\n- TM-003 [HIGH] Due date is unparseable: 'yesterday'\n- PO-001 [HIGH] Total $100000.0 exceeds the $10000 auto-approval threshold\n- FR-001 [LOW] Urgency / pressure language detected in source text\n- FR-002 [MEDIUM] Non-standard payment-channel request in source text\n\n### Adjudicator decision\noutcome: REJECT\nrationale: This invoice cannot be paid under any reasonable reading. The vendor 'Fraudster LLC' is absent from the master (VN-001) with zero prior history and no above-threshold fuzzy match, and the sole line item is the inactive zero-stock SKU FakeItem (IN-002)\u2014together a fabricated vendor/item pair with no onboarding path. That is compounded by classic fraud tells: unparseable due date 'yesterday' (TM-003), urgency/pressure language (FR-001), and a wire-transfer preference (FR-002), on a $100,000 total that already exceeds the auto-approval threshold (PO-001). There is no remediation (reactivation, vendor setup, or manager approval) that would make a Fraudster LLC / FakeItem / urgent-wire packet legitimate; reject and do not pay.\n",
+        "role": "user"
+      }
+    ],
+    "model": "grok-4.5",
+    "response_format": {
+      "json_schema": {
+        "name": "ScribeOutput",
+        "schema": {
+          "properties": {
+            "note": {
+              "title": "Note",
+              "type": "string"
+            }
+          },
+          "required": [
+            "note"
+          ],
+          "title": "ScribeOutput",
+          "type": "object"
+        }
+      },
+      "type": "json_schema"
+    },
+    "tools": null
+  },
+  "model_call": {
+    "cached_prompt_tokens": 128,
+    "completion_tokens": 46,
+    "latency_ms": 4652.934083715081,
+    "prompt_name": "scribe",
+    "prompt_tokens": 1177,
+    "reasoning_tokens": 264,
+    "requested_model": "grok-4.5",
+    "resolved_model": "grok-4.5",
+    "system_fingerprint": "fp_a39489019fa99b6e",
+    "timestamp": "2026-07-31T06:12:26.396836Z"
+  },
+  "tool_calls": []
+}

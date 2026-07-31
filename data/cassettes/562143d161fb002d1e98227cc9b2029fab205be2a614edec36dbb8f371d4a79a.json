@@ -1,0 +1,191 @@
+{
+  "content": "{\n  \"challenge\": \"The line economics are internally coherent as a net credit, not garbage: \u22125 \u00d7 $250 (WidgetA) + 2 \u00d7 $500 (WidgetB) = \u2212$250, which exactly matches the stated total\u2014so AR-002/AR-004 are largely an artifact of a mis-stated subtotal rather than an unintelligible document. Both items exist, are active, and match catalog reference prices exactly ($250 and $500). INV-1009 has no prior submission, so this is not a replay. Negative quantity and negative total are the normal shape of a return-plus-offset purchase; the innocent reading is a credit memo / RMA mis-labeled as an invoice (policy text for AR-005/AR-006 even frames the remedy as \u201ccredit memo\u201d), with the empty vendor possibly a JSON extraction gap rather than a true no-payee. Flat REJECT discards a plausible legitimate credit that should be re-typed or routed as a credit memo once the payee is supplied, not treated as an unpayable nullity.\",\n  \"proposed_outcome\": \"ESCALATE\",\n  \"cites_finding_codes\": [\"AR-005\", \"AR-006\", \"VN-005\", \"AR-002\", \"AR-004\"]\n}",
+  "fingerprint": {
+    "messages": [
+      {
+        "content": "# Critic\n\nYou argue the opposite side of the Adjudicator's decision. You are NOT a second adjudicator, a quality scorer, or a tiebreaker. Your job is to strain-test the reasoning by making the strongest case against it.\n\n## What \"the opposite side\" means\n\n- Adjudicator said **APPROVE** \u2192 argue that this invoice should be rejected or escalated. What could be wrong that the Adjudicator dismissed?\n- Adjudicator said **REJECT** \u2192 argue that this invoice may in fact be legitimate. What innocent explanation would fit the same evidence?\n- Adjudicator said **ESCALATE** \u2192 argue that the case is actually decidable, in either direction, without human involvement. What information already in the packet resolves the question?\n\n## Ground your challenge\n\nA challenge grounded in a lookup beats a rhetorical one. You have the same five tools the Adjudicator had. If your argument depends on prior history, call `get_prior_invoice` or `get_vendor_invoice_history` and cite the result. If it depends on a named alternative vendor, call `get_vendor_record` and cite whom you're pointing to. Rhetorical challenges (\"but what if it's fraud?\") are worthless without a factual hook.\n\n## What you MUST NOT do\n\n- Repeat the Adjudicator's rationale back in different words.\n- Argue that the arithmetic or stock check might be wrong. Those are validator facts, same as they were for the Adjudicator.\n- Manufacture findings the validators did not produce.\n- Recommend an outcome. You challenge; the Adjudicator decides whether to revise or hold.\n\n## Your output\n\nReturn JSON matching this shape:\n\n```\n{\n  \"challenge\": \"<one short paragraph making the strongest opposing case, grounded in evidence or a tool result>\",\n  \"proposed_outcome\": \"APPROVE\" | \"REJECT\" | \"ESCALATE\" | null,\n  \"cites_finding_codes\": [\"...\", ...]\n}\n```\n\n`proposed_outcome` is what your argument would land on if pushed to a conclusion. `null` is valid when your challenge is \"this could stand either way \u2014 the Adjudicator should decide between two plausible readings, not commit.\"\n\n## The adjudicator's decision and the invoice context\n\n### Adjudicator decision\n{\n  \"outcome\": \"REJECT\",\n  \"rationale\": \"This invoice is unpayable on multiple independent grounds. AR-006 flags a negative stated total of $-250.00, which cannot be paid as an invoice (a refund would need to be issued as a credit memo). AR-005 flags a negative quantity of -5 on WidgetA, which is nonsensical on a payable invoice. VN-005 flags an empty vendor name, so there is no payee to verify or remit to. The arithmetic mismatches (AR-002, AR-004) are consistent with these defects but are secondary. Reject and request a corrected invoice or proper credit memo from a named vendor if a refund is intended.\",\n  \"confidence\": 0.99\n}\n\n### Invoice\n{\n  \"invoice_number\": \"INV-1009\",\n  \"invoice_number_raw\": \"INV-1009\",\n  \"vendor_name\": \"\",\n  \"vendor_raw\": \"\",\n  \"vendor_claims\": [],\n  \"vendor_address\": null,\n  \"vendor_email\": null,\n  \"invoice_date\": \"2026-01-15\",\n  \"date_raw\": \"2026-01-15\",\n  \"due_date\": null,\n  \"due_date_raw\": null,\n  \"payment_terms\": \"\",\n  \"references\": [],\n  \"notes\": null,\n  \"line_items\": [\n    {\n      \"raw_item_name\": \"WidgetA\",\n      \"canonical_item\": \"WidgetA\",\n      \"quantity\": -5,\n      \"unit_price_usd\": \"250.0\",\n      \"unit_price_native\": \"250.0 USD\",\n      \"line_amount_usd\": null,\n      \"note\": null\n    },\n    {\n      \"raw_item_name\": \"WidgetB\",\n      \"canonical_item\": \"WidgetB\",\n      \"quantity\": 2,\n      \"unit_price_usd\": \"500.0\",\n      \"unit_price_native\": \"500.0 USD\",\n      \"line_amount_usd\": null,\n      \"note\": null\n    }\n  ],\n  \"additional_charges\": [],\n  \"stated_subtotal_usd\": \"1000.0\",\n  \"stated_tax_usd\": \"0.0\",\n  \"stated_total_usd\": \"-250.0\",\n  \"currency\": \"USD\",\n  \"source_file\": \"invoice_1009.json\",\n  \"source_format\": \"json\",\n  \"corrections\": []\n}\n\n### Findings\n- AR-002 [HIGH] Stated subtotal $1000.0 does not equal the sum of line amounts ($-250.0)\n- AR-004 [HIGH] Stated total $-250.0 does not equal subtotal ($1000.0) + tax ($0.0) + extras ($0) = $1000.0 \u2014 undercharge of $1250.0\n- AR-005 [CRITICAL] Line 0 (WidgetA): negative quantity -5\n- AR-006 [CRITICAL] Stated total is negative: $-250.0\n- VN-005 [CRITICAL] Vendor name is empty\n\n### Prior investigation (do NOT re-run these tool calls)\nThe Adjudicator already ran these tool calls. Their results are in context below. Do NOT re-call the same tool with the same arguments \u2014 the answer will be identical. Reuse. You may call tools for genuinely NEW questions not yet answered.\n\n- get_policy({\"finding_code\": \"AR-006\"}) \u2192 {\"code\": \"AR-006\", \"corpus_examples\": [\"INV-1009\"], \"detection\": \"`stated_total.amount_usd < 0`\", \"found\": true, \"rationale\": \"Same. A negative total is unpayable as an invoice; a refund would be a credit memo.\", \"trigger\": \"`stated_total.amount_usd < 0`\"}\n- get_policy({\"finding_code\": \"AR-005\"}) \u2192 {\"code\": \"AR-005\", \"corpus_examples\": [\"INV-1009\"], \"detection\": \"`quantity < 0` on any line\", \"found\": true, \"rationale\": \"Negative units are nonsensical for a payable invoice.\", \"trigger\": \"Any line has `quantity < 0`\"}\n- get_policy({\"finding_code\": \"VN-005\"}) \u2192 {\"code\": \"VN-005\", \"corpus_examples\": [\"INV-1009\"], \"detection\": \"`vendor_name == \\\"\\\"`\", \"found\": true, \"rationale\": \"Can't verify a party we can't name.\", \"trigger\": \"Vendor name empty\"}\n",
+        "role": "user"
+      },
+      {
+        "content": "Checking prior history and item references for an innocent explanation that could support legitimacy.",
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "function": {
+              "arguments": "{\"invoice_number\": \"INV-1009\"}",
+              "name": "get_prior_invoice"
+            },
+            "id": "call-955b11cc-61e1-4387-a21c-ccaf7e7ee8ad-0",
+            "type": "function"
+          },
+          {
+            "function": {
+              "arguments": "{\"item\": \"WidgetA\"}",
+              "name": "get_item_reference"
+            },
+            "id": "call-955b11cc-61e1-4387-a21c-ccaf7e7ee8ad-1",
+            "type": "function"
+          },
+          {
+            "function": {
+              "arguments": "{\"item\": \"WidgetB\"}",
+              "name": "get_item_reference"
+            },
+            "id": "call-955b11cc-61e1-4387-a21c-ccaf7e7ee8ad-2",
+            "type": "function"
+          },
+          {
+            "function": {
+              "arguments": "{\"name\": \"\"}",
+              "name": "get_vendor_invoice_history"
+            },
+            "id": "call-955b11cc-61e1-4387-a21c-ccaf7e7ee8ad-3",
+            "type": "function"
+          }
+        ]
+      },
+      {
+        "content": "{\"invoice_number\": \"INV-1009\", \"found\": false, \"store_populated\": true, \"semantic_hash\": null, \"stated_total_usd\": null, \"source_file\": null, \"prior_outcome\": null}",
+        "role": "tool",
+        "tool_call_id": "call-955b11cc-61e1-4387-a21c-ccaf7e7ee8ad-0"
+      },
+      {
+        "content": "{\"query\": \"WidgetA\", \"found\": true, \"canonical_name\": \"WidgetA\", \"stock\": 15, \"reference_unit_price\": \"250\", \"category\": \"component\", \"active\": true}",
+        "role": "tool",
+        "tool_call_id": "call-955b11cc-61e1-4387-a21c-ccaf7e7ee8ad-1"
+      },
+      {
+        "content": "{\"query\": \"WidgetB\", \"found\": true, \"canonical_name\": \"WidgetB\", \"stock\": 10, \"reference_unit_price\": \"500\", \"category\": \"component\", \"active\": true}",
+        "role": "tool",
+        "tool_call_id": "call-955b11cc-61e1-4387-a21c-ccaf7e7ee8ad-2"
+      },
+      {
+        "content": "{\"vendor_name\": \"\", \"invoice_count\": 0, \"total_value_usd\": \"0\", \"first_seen\": null, \"last_seen\": null, \"prior_outcomes\": {}}",
+        "role": "tool",
+        "tool_call_id": "call-955b11cc-61e1-4387-a21c-ccaf7e7ee8ad-3"
+      }
+    ],
+    "model": "grok-4.5",
+    "response_format": null,
+    "tools": [
+      {
+        "function": {
+          "description": "Look up a vendor in the master. Returns the exact record if one exists, plus any fuzzy candidates with match scores and each candidate's status (active/inactive) and relationship_since date. The Adjudicator interprets these facts; the tool does not.",
+          "name": "get_vendor_record",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "title": "Name",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "title": "VendorRecordQuery",
+            "type": "object"
+          }
+        },
+        "type": "function"
+      },
+      {
+        "function": {
+          "description": "Prior invoices for this vendor from the audit store: count, total value in USD, first and last seen dates, and a count of prior outcomes by type. Zero on an empty store \u2014 a first-time payee is a valid answer, not an error.",
+          "name": "get_vendor_invoice_history",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "title": "Name",
+                "type": "string"
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "title": "VendorHistoryQuery",
+            "type": "object"
+          }
+        },
+        "type": "function"
+      },
+      {
+        "function": {
+          "description": "Look up an inventory item by name (canonicalized first). Returns stock, reference_unit_price, category, and active flag. Never fuzzy-matches items \u2014 an unknown item returns found=False.",
+          "name": "get_item_reference",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "item": {
+                "title": "Item",
+                "type": "string"
+              }
+            },
+            "required": [
+              "item"
+            ],
+            "title": "ItemQuery",
+            "type": "object"
+          }
+        },
+        "type": "function"
+      },
+      {
+        "function": {
+          "description": "Look up any prior submission of this invoice number in the audit store. Returns semantic_hash, stated total, source file, and prior outcome. Empty result on first submission \u2014 that is the meaningful answer for a new invoice.",
+          "name": "get_prior_invoice",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "invoice_number": {
+                "title": "Invoice Number",
+                "type": "string"
+              }
+            },
+            "required": [
+              "invoice_number"
+            ],
+            "title": "PriorInvoiceQuery",
+            "type": "object"
+          }
+        },
+        "type": "function"
+      },
+      {
+        "function": {
+          "description": "Look up the documented trigger, detection method, and business rationale for a finding code, from the exception taxonomy. Does NOT return a recommended action or a severity assessment.",
+          "name": "get_policy",
+          "parameters": {
+            "additionalProperties": false,
+            "properties": {
+              "finding_code": {
+                "title": "Finding Code",
+                "type": "string"
+              }
+            },
+            "required": [
+              "finding_code"
+            ],
+            "title": "PolicyQuery",
+            "type": "object"
+          }
+        },
+        "type": "function"
+      }
+    ]
+  },
+  "model_call": {
+    "cached_prompt_tokens": 128,
+    "completion_tokens": 269,
+    "latency_ms": 20569.280916824937,
+    "prompt_name": "critic_round_1_investigate_turn_2",
+    "prompt_tokens": 2478,
+    "reasoning_tokens": 898,
+    "requested_model": "grok-4.5",
+    "resolved_model": "grok-4.5",
+    "system_fingerprint": "fp_a39489019fa99b6e",
+    "timestamp": "2026-07-31T06:21:03.230799Z"
+  },
+  "tool_calls": []
+}

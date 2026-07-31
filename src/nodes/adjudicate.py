@@ -12,6 +12,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from pathlib import Path as _Path
+
 from pydantic import BaseModel, Field
 
 from src.graph_state import GraphState
@@ -212,7 +214,10 @@ def _invoice_summary(invoice: Invoice) -> dict:
         "currency": (
             invoice.stated_total.currency if invoice.stated_total else "USD"
         ),
-        "source_file": invoice.source_file,
+        # Basename only — cassette fingerprints must be machine-independent so
+        # a cold clone in any location hits recorded plays. The absolute path
+        # remains on the Invoice object for the audit store and dashboard.
+        "source_file": _Path(invoice.source_file).name,
         "source_format": invoice.source_format,
         "corrections": [
             {

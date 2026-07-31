@@ -148,7 +148,17 @@ class LLMProvider:
         self.cassette_store = cassette_store
         self.timeout = timeout
         self.max_tokens = max_tokens
-        self._client = client or OpenAI(api_key=self.api_key, base_url=base_url, timeout=timeout)
+
+        # A missing API key is only fatal for a live call. In replay mode we
+        # never touch the network — the OpenAI client is constructed with a
+        # placeholder key so cold-clone `make demo` (no .env) works. If a
+        # live call is later attempted with the placeholder, xAI returns an
+        # auth error which the retry classifier treats as non-retryable and
+        # surfaces plainly.
+        effective_key = self.api_key or "replay-mode-placeholder"
+        self._client = client or OpenAI(
+            api_key=effective_key, base_url=base_url, timeout=timeout,
+        )
 
     # -- Public API ---------------------------------------------------------
 

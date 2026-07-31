@@ -1,0 +1,139 @@
+{
+  "content": "{\n  \"challenge\": \"This is decidable as REJECT without a clerk. PR-001 policy is explicit overcharge vs. contracted price, and get_item_reference returns a single flat $250 for WidgetA with no rush tier or schedule\u2014the \\\"(rush order)\\\" text is vendor labeling, not authorization. Vendor record shows only standard Net 30 terms since 2020 and no rush arrangement; other lines (WidgetB $500, GadgetX $750) match reference exactly, so the $300 line is a clear unauthorized premium. PR-003's dual pricing is the same overcharge sitting beside the correctly priced WidgetA line, not a legitimate discount pattern requiring judgment.\",\n  \"proposed_outcome\": \"REJECT\",\n  \"cites_finding_codes\": [\"PR-001\", \"PR-003\"]\n}",
+  "fingerprint": {
+    "messages": [
+      {
+        "content": "# Critic\n\nYou argue the opposite side of the Adjudicator's decision. You are NOT a second adjudicator, a quality scorer, or a tiebreaker. Your job is to strain-test the reasoning by making the strongest case against it.\n\n## What \"the opposite side\" means\n\n- Adjudicator said **APPROVE** \u2192 argue that this invoice should be rejected or escalated. What could be wrong that the Adjudicator dismissed?\n- Adjudicator said **REJECT** \u2192 argue that this invoice may in fact be legitimate. What innocent explanation would fit the same evidence?\n- Adjudicator said **ESCALATE** \u2192 argue that the case is actually decidable, in either direction, without human involvement. What information already in the packet resolves the question?\n\n## Ground your challenge\n\nA challenge grounded in a lookup beats a rhetorical one. You have the same five tools the Adjudicator had. If your argument depends on prior history, call `get_prior_invoice` or `get_vendor_invoice_history` and cite the result. If it depends on a named alternative vendor, call `get_vendor_record` and cite whom you're pointing to. Rhetorical challenges (\"but what if it's fraud?\") are worthless without a factual hook.\n\n## What you MUST NOT do\n\n- Repeat the Adjudicator's rationale back in different words.\n- Argue that the arithmetic or stock check might be wrong. Those are validator facts, same as they were for the Adjudicator.\n- Manufacture findings the validators did not produce.\n- Recommend an outcome. You challenge; the Adjudicator decides whether to revise or hold.\n\n## Your output\n\nReturn JSON matching this shape:\n\n```\n{\n  \"challenge\": \"<one short paragraph making the strongest opposing case, grounded in evidence or a tool result>\",\n  \"proposed_outcome\": \"APPROVE\" | \"REJECT\" | \"ESCALATE\" | null,\n  \"cites_finding_codes\": [\"...\", ...]\n}\n```\n\n`proposed_outcome` is what your argument would land on if pushed to a conclusion. `null` is valid when your challenge is \"this could stand either way \u2014 the Adjudicator should decide between two plausible readings, not commit.\"\n\n## The adjudicator's decision and the invoice context\n\n### Adjudicator decision\n{\n  \"outcome\": \"ESCALATE\",\n  \"rationale\": \"PR-001 flags WidgetA on the rush-order line at $300, 20% above the contracted reference of $250 (confirmed via item reference). PR-003 notes the same item billed at both $250 and $300 on this invoice. The line is explicitly labeled \\\"WidgetA (rush order)\\\", so a rush premium is a plausible reading, but there is no contracted rush schedule on file to confirm that 20% is authorized. A clerk should verify whether the rush surcharge is approved and, if so, proceed; otherwise request a corrected invoice at the reference price.\",\n  \"confidence\": 0.85\n}\n\n### Invoice\n{\n  \"invoice_number\": \"INV-1010\",\n  \"invoice_number_raw\": \"INV-1010\",\n  \"vendor_name\": \"Consolidated Materials Group\",\n  \"vendor_raw\": \"Consolidated Materials Group\",\n  \"vendor_claims\": [],\n  \"vendor_address\": null,\n  \"vendor_email\": null,\n  \"invoice_date\": \"2026-01-27\",\n  \"date_raw\": \"January 27, 2026\",\n  \"due_date\": \"2026-02-26\",\n  \"due_date_raw\": \"February 26, 2026\",\n  \"payment_terms\": \"Net 30\",\n  \"references\": [],\n  \"notes\": \"Thank you for your business!\",\n  \"line_items\": [\n    {\n      \"raw_item_name\": \"WidgetA\",\n      \"canonical_item\": \"WidgetA\",\n      \"quantity\": 8,\n      \"unit_price_usd\": \"250.0\",\n      \"unit_price_native\": \"250.0 USD\",\n      \"line_amount_usd\": \"2000.0\",\n      \"note\": null\n    },\n    {\n      \"raw_item_name\": \"WidgetB\",\n      \"canonical_item\": \"WidgetB\",\n      \"quantity\": 4,\n      \"unit_price_usd\": \"500.0\",\n      \"unit_price_native\": \"500.0 USD\",\n      \"line_amount_usd\": \"2000.0\",\n      \"note\": null\n    },\n    {\n      \"raw_item_name\": \"GadgetX\",\n      \"canonical_item\": \"GadgetX\",\n      \"quantity\": 2,\n      \"unit_price_usd\": \"750.0\",\n      \"unit_price_native\": \"750.0 USD\",\n      \"line_amount_usd\": \"1500.0\",\n      \"note\": null\n    },\n    {\n      \"raw_item_name\": \"WidgetA (rush order)\",\n      \"canonical_item\": \"WidgetA\",\n      \"quantity\": 4,\n      \"unit_price_usd\": \"300.0\",\n      \"unit_price_native\": \"300.0 USD\",\n      \"line_amount_usd\": \"1200.0\",\n      \"note\": null\n    }\n  ],\n  \"additional_charges\": [\n    {\n      \"label\": \"Shipping\",\n      \"amount_usd\": \"150.0\"\n    }\n  ],\n  \"stated_subtotal_usd\": \"6700.0\",\n  \"stated_tax_usd\": \"335.0\",\n  \"stated_total_usd\": \"7185.0\",\n  \"currency\": \"USD\",\n  \"source_file\": \"invoice_1010.txt\",\n  \"source_format\": \"txt\",\n  \"corrections\": []\n}\n\n### Findings\n- PR-001 [HIGH] WidgetA: unit price $300.0 exceeds reference $250 by 20.0% (tolerance 5.0%)\n- PR-003 [MEDIUM] WidgetA appears at multiple prices within the invoice: $250.0, $300.0\n\n### Prior investigation (do NOT re-run these tool calls)\nThe Adjudicator already ran these tool calls. Their results are in context below. Do NOT re-call the same tool with the same arguments \u2014 the answer will be identical. Reuse. You may call tools for genuinely NEW questions not yet answered.\n\n- get_policy({\"finding_code\": \"PR-001\"}) \u2192 {\"code\": \"PR-001\", \"corpus_examples\": [\"INV-1014\"], \"detection\": \"`unit_price.amount_usd > reference \\u00d7 1.05`\", \"found\": true, \"rationale\": \"Overcharge relative to contracted price.\", \"trigger\": \"Unit price > reference \\u00d7 (1 + tolerance)\"}\n- get_policy({\"finding_code\": \"PR-003\"}) \u2192 {\"code\": \"PR-003\", \"corpus_examples\": [\"INV-1010\", \"INV-1013\"], \"detection\": \"Group line items by canonical name, check price uniqueness\", \"found\": true, \"rationale\": \"Legitimate volume discounts appear this way; so do keying errors. The Adjudicator decides.\", \"trigger\": \"Same canonical item at different unit prices within one invoice\"}\n- get_item_reference({\"item\": \"WidgetA\"}) \u2192 {\"active\": true, \"canonical_name\": \"WidgetA\", \"category\": \"component\", \"found\": true, \"query\": \"WidgetA\", \"reference_unit_price\": \"250\", \"stock\": 15}\n",
+        "role": "user"
+      },
+      {
+        "content": "I'll strain-test the ESCALATE decision with vendor and invoice history lookups the Adjudicator didn't run.",
+        "role": "assistant",
+        "tool_calls": [
+          {
+            "function": {
+              "arguments": "{\"name\": \"Consolidated Materials Group\"}",
+              "name": "get_vendor_record"
+            },
+            "id": "call-af02b26c-7342-4cff-8658-238db1a10863-0",
+            "type": "function"
+          },
+          {
+            "function": {
+              "arguments": "{\"name\": \"Consolidated Materials Group\"}",
+              "name": "get_vendor_invoice_history"
+            },
+            "id": "call-af02b26c-7342-4cff-8658-238db1a10863-1",
+            "type": "function"
+          },
+          {
+            "function": {
+              "arguments": "{\"invoice_number\": \"INV-1010\"}",
+              "name": "get_prior_invoice"
+            },
+            "id": "call-af02b26c-7342-4cff-8658-238db1a10863-2",
+            "type": "function"
+          },
+          {
+            "function": {
+              "arguments": "{\"item\": \"WidgetB\"}",
+              "name": "get_item_reference"
+            },
+            "id": "call-af02b26c-7342-4cff-8658-238db1a10863-3",
+            "type": "function"
+          },
+          {
+            "function": {
+              "arguments": "{\"item\": \"GadgetX\"}",
+              "name": "get_item_reference"
+            },
+            "id": "call-af02b26c-7342-4cff-8658-238db1a10863-4",
+            "type": "function"
+          }
+        ]
+      },
+      {
+        "content": "{\"query\": \"Consolidated Materials Group\", \"exact_match\": {\"name\": \"Consolidated Materials Group\", \"domain\": \"consolidatedmg.com\", \"status\": \"active\", \"contracted_terms\": \"Net 30\", \"relationship_since\": \"2020-02-14\"}, \"fuzzy_candidates\": [{\"name\": \"Consolidated Materials Group\", \"score\": 1.0, \"below_threshold\": false, \"status\": \"active\", \"relationship_since\": \"2020-02-14\"}, {\"name\": \"Atlas Industrial Supply\", \"score\": 0.4314, \"below_threshold\": true, \"status\": \"active\", \"relationship_since\": \"2019-09-27\"}, {\"name\": \"Acme Industrial Supplies\", \"score\": 0.4231, \"below_threshold\": true, \"status\": \"active\", \"relationship_since\": \"2017-05-30\"}, {\"name\": \"Summit Manufacturing Co.\", \"score\": 0.4231, \"below_threshold\": true, \"status\": \"active\", \"relationship_since\": \"2022-06-18\"}, {\"name\": \"TechParts International\", \"score\": 0.3529, \"below_threshold\": true, \"status\": \"active\", \"relationship_since\": \"2021-04-05\"}], \"match_threshold\": 0.7}",
+        "role": "tool",
+        "tool_call_id": "call-af02b26c-7342-4cff-8658-238db1a10863-0"
+      },
+      {
+        "content": "{\"vendor_name\": \"Consolidated Materials Group\", \"invoice_count\": 0, \"total_value_usd\": \"0\", \"first_seen\": null, \"last_seen\": null, \"prior_outcomes\": {}}",
+        "role": "tool",
+        "tool_call_id": "call-af02b26c-7342-4cff-8658-238db1a10863-1"
+      },
+      {
+        "content": "{\"invoice_number\": \"INV-1010\", \"found\": false, \"store_populated\": true, \"semantic_hash\": null, \"stated_total_usd\": null, \"source_file\": null, \"prior_outcome\": null}",
+        "role": "tool",
+        "tool_call_id": "call-af02b26c-7342-4cff-8658-238db1a10863-2"
+      },
+      {
+        "content": "{\"query\": \"WidgetB\", \"found\": true, \"canonical_name\": \"WidgetB\", \"stock\": 10, \"reference_unit_price\": \"500\", \"category\": \"component\", \"active\": true}",
+        "role": "tool",
+        "tool_call_id": "call-af02b26c-7342-4cff-8658-238db1a10863-3"
+      },
+      {
+        "content": "{\"query\": \"GadgetX\", \"found\": true, \"canonical_name\": \"GadgetX\", \"stock\": 5, \"reference_unit_price\": \"750\", \"category\": \"assembly\", \"active\": true}",
+        "role": "tool",
+        "tool_call_id": "call-af02b26c-7342-4cff-8658-238db1a10863-4"
+      },
+      {
+        "content": "Based on your investigation above, produce your final answer as JSON matching the response schema. Do not call any tools; you have all the information you need.",
+        "role": "user"
+      }
+    ],
+    "model": "grok-4.5",
+    "response_format": {
+      "json_schema": {
+        "name": "CriticOutput",
+        "schema": {
+          "properties": {
+            "challenge": {
+              "title": "Challenge",
+              "type": "string"
+            },
+            "cites_finding_codes": {
+              "items": {
+                "type": "string"
+              },
+              "title": "Cites Finding Codes",
+              "type": "array"
+            },
+            "proposed_outcome": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "default": null,
+              "title": "Proposed Outcome"
+            }
+          },
+          "required": [
+            "challenge"
+          ],
+          "title": "CriticOutput",
+          "type": "object"
+        }
+      },
+      "type": "json_schema"
+    },
+    "tools": null
+  },
+  "model_call": {
+    "cached_prompt_tokens": 128,
+    "completion_tokens": 173,
+    "latency_ms": 16468.017749954015,
+    "prompt_name": "critic_round_1_synthesize",
+    "prompt_tokens": 2635,
+    "reasoning_tokens": 590,
+    "requested_model": "grok-4.5",
+    "resolved_model": "grok-4.5",
+    "system_fingerprint": "fp_a39489019fa99b6e",
+    "timestamp": "2026-07-31T06:23:04.126076Z"
+  },
+  "tool_calls": []
+}
