@@ -32,7 +32,7 @@ test:
 	.venv/bin/pytest tests/
 
 report:
-	@echo "not yet implemented"
+	@.venv/bin/python -m scripts.report
 
 dashboard:
 	@echo "not yet implemented"
