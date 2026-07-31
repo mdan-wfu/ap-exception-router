@@ -18,7 +18,15 @@ from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
+# Import config eagerly so `load_dotenv()` fires at dashboard boot. Without
+# this, `data.xai_key_configured()` reads an empty XAI_API_KEY (dotenv
+# never ran) and the upload-run live path always short-circuits to
+# "Not configured" — the bug that prevented the initial live verification.
+from src import config as _cfg  # noqa: F401  (side-effect import)
+
 # Force replay unconditionally at page render. See Phase 11 hardening.
+# The `LLM_MODE` from .env (set to "replay" for the reviewer's cold clone)
+# is preserved by this line; the assignment is the belt-and-suspenders.
 os.environ["LLM_MODE"] = "replay"
 os.environ.setdefault("HUMAN_GATE_MODE", "demo")
 
@@ -246,23 +254,51 @@ def upload_run(name: str, confirm: str = Form("")):
     if not data.xai_key_configured():
         return RedirectResponse(url=f"/upload/{name}?err=nokey", status_code=303)
 
-    # Temporarily switch to auto for this one call — records the cassette if
-    # miss. Restore after.
-    saved = os.environ.get("LLM_MODE", "replay")
-    os.environ["LLM_MODE"] = "auto"
+    # The env-var flip (previous code) was a no-op: src/config.py reads
+    # LLM_MODE once at import time, so `os.environ[...] = "auto"` never
+    # reached the provider. The bug: clicking Run live raised CacheMissError.
+    #
+    # Fix: swap the agent_loop provider singleton with an explicit
+    # `mode="auto"` one for exactly this call, restore in `finally` so
+    # any crash mid-request still returns the dashboard to replay-only.
+    # Approach A (from the patch options) — thread the mode through by
+    # constructing a provider that has it — because approach B (env-var
+    # rewrite + module reload) doesn't work with our from-import.
+    #
+    # See DECISIONS 2026-07-31 upload-run-live-provider-swap.
+    # TWO provider singletons live under src.llm — the agent_loop's (used
+    # by adjudicate/critic/scribe) and text_adapter's (used by the .txt/.pdf
+    # extractor). Both must be swapped for a live run; missing either means
+    # the extraction step still cache-misses in replay mode.
+    from src.llm.agent_loop import get_provider as get_agent_provider, \
+                                     set_provider as set_agent_provider
+    from src.adapters.text_adapter import _get_provider as get_text_provider, \
+                                            set_provider as set_text_provider
+    from src.llm.provider import LLMProvider
+    from src.llm.cassette import CassetteStore
+
+    saved_agent = get_agent_provider()
+    saved_text = get_text_provider()
+    live_agent = LLMProvider(mode="auto", cassette_store=CassetteStore())
+    live_text = LLMProvider(mode="auto", cassette_store=CassetteStore())
+    set_agent_provider(live_agent)
+    set_text_provider(live_text)
     try:
         from src.graph import run_one
         run_one(str(path))
     except Exception as exc:
         return HTMLResponse(
-            f"<h1>run failed</h1><pre>{type(exc).__name__}: {exc}</pre>",
+            f"<h1>run failed</h1><pre>{type(exc).__name__}: {exc}</pre>"
+            f"<p><a href='/upload/{name}'>← back</a></p>",
             status_code=500,
         )
     finally:
-        os.environ["LLM_MODE"] = saved
+        # Airtight restoration: even if the response construction blows up,
+        # both singletons return to replay before the next request lands.
+        set_agent_provider(saved_agent)
+        set_text_provider(saved_text)
 
     # Redirect to the invoice detail — the audit store now has a row.
-    # We need the invoice number; grab it via the extraction.
     ext, _ = data.re_extract(str(path))
     if ext is not None:
         return RedirectResponse(url=f"/invoice/{ext.invoice.invoice_number}",
