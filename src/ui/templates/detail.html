@@ -1,0 +1,258 @@
+{% extends "base.html" %}
+{% block title %}{{ run.invoice_number }} — detail{% endblock %}
+{% block content %}
+
+<div class="mb-8">
+  <div class="flex items-center gap-3">
+    <a class="text-sm link-accent" href="/">← queue</a>
+    <span class="chip chip-{{ run.corpus }}">{{ run.corpus }}</span>
+    <span class="chip chip-{{ run.outcome|lower }}">{{ run.outcome }}</span>
+    {% if run.human_outcome %}
+      <span class="chip chip-{{ run.human_outcome|lower }}">human: {{ run.human_outcome }}</span>
+    {% endif %}
+    {% if run.revision_occurred %}
+      <span class="chip chip-info">critic revised</span>
+    {% elif run.critic_challenge %}
+      <span class="chip chip-info">critic held</span>
+    {% endif %}
+    {% if run.guardrail_override_fired %}
+      <span class="chip chip-critical">§2.2 override</span>
+    {% endif %}
+  </div>
+  <h1 class="display text-4xl mt-3">{{ run.invoice_number }}</h1>
+  <p class="text-slate-600 mt-1">
+    {{ run.vendor_name or "(no vendor name extracted)" }} · ${{ "%.2f"|format(run.stated_total_usd or 0) }} {{ run.currency or "USD" }} · {{ run.source_format }} adapter
+    {% if run.invoice_number == "INV-1004" %}
+      · <a class="link-accent" href="/duplicate/INV-1004">see duplicate diff →</a>
+    {% endif %}
+  </p>
+</div>
+
+<div class="grid grid-cols-2 gap-6 mb-8">
+  <div class="card">
+    <div class="p-4 border-b flex items-baseline gap-3">
+      <h3 class="display text-lg">Source</h3>
+      <span class="text-xs text-slate-500">{{ run.source_file }}</span>
+      <span class="ml-auto text-xs text-slate-400">{{ extraction.adapter_used if extraction else "?" }} adapter{% if extraction and extraction.llm_fallback %} (LLM fallback){% endif %}</span>
+    </div>
+    <pre class="code-panel p-4 text-xs overflow-auto" style="max-height: 520px; white-space: pre-wrap;">{{ raw_source }}</pre>
+  </div>
+  <div class="card p-6">
+    <h3 class="display text-lg mb-4">Extracted</h3>
+    {% if invoice %}
+      <dl class="grid grid-cols-3 gap-y-3 text-sm">
+        <dt class="text-slate-500">Invoice #</dt>
+        <dd class="col-span-2 mono">{{ invoice.invoice_number }} <span class="text-slate-400">(raw: {{ invoice.invoice_number_raw }})</span></dd>
+        <dt class="text-slate-500">Vendor</dt>
+        <dd class="col-span-2">{{ invoice.vendor_name or "(empty)" }}</dd>
+        {% if invoice.vendor_claims %}
+          <dt class="text-slate-500">Vendor claims</dt>
+          <dd class="col-span-2 text-slate-700">{{ invoice.vendor_claims|join(", ") }}</dd>
+        {% endif %}
+        {% if invoice.vendor_address %}
+          <dt class="text-slate-500">Address</dt>
+          <dd class="col-span-2 text-slate-700">{{ invoice.vendor_address }}</dd>
+        {% endif %}
+        <dt class="text-slate-500">Date</dt>
+        <dd class="col-span-2 mono">{{ invoice.invoice_date or "—" }}</dd>
+        <dt class="text-slate-500">Due</dt>
+        <dd class="col-span-2 mono">{{ invoice.due_date or "—" }} <span class="text-slate-400">(raw: {{ invoice.due_date_raw or "—" }})</span></dd>
+        <dt class="text-slate-500">Terms</dt>
+        <dd class="col-span-2">{{ invoice.payment_terms or "—" }}</dd>
+        <dt class="text-slate-500">Subtotal</dt>
+        <dd class="col-span-2 mono">{{ ("$%.2f" % invoice.stated_subtotal.amount_usd) if invoice.stated_subtotal else "—" }}</dd>
+        <dt class="text-slate-500">Tax</dt>
+        <dd class="col-span-2 mono">{{ ("$%.2f" % invoice.stated_tax.amount_usd) if invoice.stated_tax else "—" }}</dd>
+        <dt class="text-slate-500">Total</dt>
+        <dd class="col-span-2 mono">{{ ("$%.2f" % invoice.stated_total.amount_usd) if invoice.stated_total else "—" }} {{ invoice.stated_total.currency if invoice.stated_total else "" }}</dd>
+        <dt class="text-slate-500">Confidence</dt>
+        <dd class="col-span-2 text-sm">
+          {% set conf = invoice.extraction_confidence %}
+          {% if conf is none %}
+            <span class="text-slate-400">not reported</span>
+          {% elif conf == 1.0 and run.source_format in ("json", "csv", "xml") %}
+            <span class="chip chip-info">1.00 — deterministic parse</span>
+          {% else %}
+            <span class="chip chip-medium">{{ "%.2f"|format(conf) }} — LLM self-reported</span>
+          {% endif %}
+        </dd>
+      </dl>
+
+      {% if invoice.line_items %}
+      <div class="mt-6">
+        <div class="text-xs text-slate-500 uppercase tracking-wide mb-2">Line items ({{ invoice.line_items|length }})</div>
+        <table class="w-full text-xs">
+          <thead class="text-slate-500 uppercase text-xs">
+            <tr><th class="text-left py-1">Raw</th><th class="text-left py-1">Canonical</th>
+                <th class="text-right py-1">Qty</th><th class="text-right py-1">Unit $</th><th class="text-right py-1">Line $</th></tr>
+          </thead>
+          <tbody>
+            {% for li in invoice.line_items %}
+            <tr class="border-t border-slate-100">
+              <td class="py-1 mono">{{ li.raw_item_name }}</td>
+              <td class="py-1 mono text-slate-700">{{ li.canonical_item or "—" }}</td>
+              <td class="py-1 text-right mono">{{ li.quantity }}</td>
+              <td class="py-1 text-right mono">${{ "%.2f"|format(li.unit_price.amount_usd) }}</td>
+              <td class="py-1 text-right mono">{{ ("$%.2f" % li.line_amount.amount_usd) if li.line_amount else "—" }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+
+      {% if invoice.corrections %}
+      <div class="mt-6 border-l-4 border-amber-500 pl-4">
+        <div class="text-xs uppercase tracking-wide" style="color:var(--amber)">Extractor corrections ({{ invoice.corrections|length }})</div>
+        <div class="text-xs text-slate-500 mb-2">Silent repairs made during extraction — surfaced as EX-001.</div>
+        {% for c in invoice.corrections %}
+        <div class="text-sm py-1">
+          <span class="mono text-xs text-slate-500">{{ c.field_path }}:</span>
+          <span class="mono">{{ c.original|tojson }}</span>
+          <span class="text-slate-400">→</span>
+          <span class="mono" style="color:var(--accent)">{{ c.corrected|tojson }}</span>
+          <div class="text-xs text-slate-500 ml-2">{{ c.reason }}</div>
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    {% else %}
+      <p class="text-slate-500">Extraction unavailable.</p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Findings -->
+<section class="card mb-8">
+  <div class="p-4 border-b"><h3 class="display text-lg">Findings ({{ findings|length }})</h3></div>
+  {% if findings %}
+  <div class="divide-y">
+    {% for f in findings %}
+    <div class="p-4 flex gap-4">
+      <div class="w-20">
+        <span class="chip chip-{{ f.severity|lower }}">{{ f.severity }}</span>
+      </div>
+      <div class="w-20 mono text-sm">{{ f.code }}</div>
+      <div class="flex-1">
+        <div class="text-sm">{{ f.message }}</div>
+        {% if f.evidence %}<div class="text-xs text-slate-500 mono mt-1">evidence: {{ f.evidence }}</div>{% endif %}
+        {% if f.field_path %}<div class="text-xs text-slate-400 mono mt-0.5">at {{ f.field_path }}</div>{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% else %}
+    <p class="p-6 text-sm text-slate-500">No findings — clean invoice.</p>
+  {% endif %}
+</section>
+
+<!-- Tool trace -->
+<section class="card mb-8">
+  <div class="p-4 border-b"><h3 class="display text-lg">Tool trace ({{ tool_calls|length }})</h3></div>
+  {% if tool_calls %}
+    <ol class="divide-y">
+      {% for t in tool_calls %}
+      <li class="p-4">
+        <div class="flex items-baseline gap-3">
+          <span class="mono text-xs text-slate-400">{{ loop.index }}</span>
+          <span class="mono text-sm" style="color:var(--accent)">{{ t.name }}</span>
+          <span class="mono text-xs text-slate-500">{{ t.arguments|tojson }}</span>
+          <span class="ml-auto text-xs text-slate-400">{{ "%.0f"|format(t.latency_ms) }} ms</span>
+        </div>
+        <details class="mt-2 text-xs">
+          <summary class="cursor-pointer text-slate-500">result</summary>
+          <pre class="mono text-xs mt-2 p-3 bg-slate-50 rounded overflow-auto" style="max-height: 240px;">{{ t.result|tojson(indent=2) }}</pre>
+        </details>
+      </li>
+      {% endfor %}
+    </ol>
+  {% else %}
+    <p class="p-6 text-sm text-slate-500">No tool calls — Adjudicator decided on findings alone.</p>
+  {% endif %}
+</section>
+
+<!-- Rationale + critic + revision -->
+<div class="grid grid-cols-2 gap-6 mb-8">
+  <div class="card p-6">
+    <div class="flex items-baseline gap-3 mb-3">
+      <h3 class="display text-lg">Adjudicator rationale</h3>
+      {% if run.revision_occurred %}<span class="chip chip-info">revised after critic</span>
+      {% elif run.critic_challenge %}<span class="chip chip-info">held after critic</span>{% endif %}
+    </div>
+    <div class="prose text-sm">{{ run.rationale or "(no rationale recorded)" }}</div>
+  </div>
+  <div class="card p-6" style="background: #fefce8;">
+    <h3 class="display text-lg mb-3" style="color:var(--amber)">Critic challenge</h3>
+    {% if run.critic_challenge %}
+      <div class="prose text-sm text-slate-700">{{ run.critic_challenge }}</div>
+      <div class="text-xs text-slate-500 mt-4">
+        Held-position is a legitimate outcome. The Adjudicator {{ "revised" if run.revision_occurred else "considered and held" }} its decision after this challenge.
+      </div>
+    {% else %}
+      <p class="text-sm text-slate-500">No critic challenge fired for this invoice.</p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Scribe note + settlement -->
+<div class="grid grid-cols-2 gap-6 mb-8">
+  <div class="card p-6">
+    <h3 class="display text-lg mb-3">Scribe note</h3>
+    <div class="prose text-sm" style="max-width: 60ch;">{{ run.scribe_note or "(none)" }}</div>
+    <div class="text-xs text-slate-400 mt-3">Handoff to the clerk. Georgia-serif because a human reads this.</div>
+  </div>
+  <div class="card p-6">
+    <h3 class="display text-lg mb-3">Settlement</h3>
+    {% if settlement %}
+      <div class="text-sm">
+        <span class="chip chip-{{ 'approve' if settlement.settlement_type == 'PAID' else ('reject' if settlement.settlement_type == 'REJECTED' else 'escalate') }}">{{ settlement.settlement_type }}</span>
+        {% if settlement.amount_usd %}<span class="mono ml-2">${{ "%.2f"|format(settlement.amount_usd) }}</span>{% endif %}
+      </div>
+      {% if settlement.mock_payment_ref %}
+        <div class="mono text-xs mt-2 text-slate-500">ref: {{ settlement.mock_payment_ref }}</div>
+      {% endif %}
+      {% if settlement.reason %}
+        <div class="text-xs mt-2 text-slate-600">{{ settlement.reason }}</div>
+      {% endif %}
+    {% else %}
+      <p class="text-sm text-slate-500">Not settled — awaiting human decision.</p>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Cost by node -->
+<section class="card mb-8">
+  <div class="p-4 border-b"><h3 class="display text-lg">Cost by node</h3></div>
+  <table class="w-full text-sm">
+    <thead class="text-xs text-slate-500 uppercase">
+      <tr class="border-b">
+        <th class="text-left px-6 py-3">Node</th>
+        <th class="text-right px-6 py-3">Calls</th>
+        <th class="text-right px-6 py-3">Cost</th>
+        <th class="text-right px-6 py-3">Prompt</th>
+        <th class="text-right px-6 py-3">Cached</th>
+        <th class="text-right px-6 py-3">Completion</th>
+        <th class="text-right px-6 py-3">Reasoning</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in cost_by_node %}
+      <tr class="border-b">
+        <td class="px-6 py-3 mono">{{ c.node }}</td>
+        <td class="px-6 py-3 text-right mono">{{ c.n }}</td>
+        <td class="px-6 py-3 text-right mono">${{ "%.5f"|format(c.cost) }}</td>
+        <td class="px-6 py-3 text-right mono">{{ "{:,}".format(c.prompt) }}</td>
+        <td class="px-6 py-3 text-right mono text-slate-500">{{ "{:,}".format(c.cached) }}</td>
+        <td class="px-6 py-3 text-right mono">{{ "{:,}".format(c.completion) }}</td>
+        <td class="px-6 py-3 text-right mono">{{ "{:,}".format(c.reasoning) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<div class="text-xs text-slate-400">
+  Nodes fired: {{ run.nodes_fired|join(" → ") }}
+</div>
+
+{% endblock %}

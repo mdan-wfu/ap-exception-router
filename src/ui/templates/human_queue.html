@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Human review — AP Exception Router{% endblock %}
+{% block content %}
+
+<div class="mb-8">
+  <h1 class="display text-4xl">Human review queue</h1>
+  <p class="text-slate-600 mt-2 max-w-3xl">
+    Escalated invoices awaiting a clerk decision.
+    Actions here record a <strong>separate human_outcome field</strong>
+    on the run — never overwriting the model's decision. Below the queue,
+    the resolved section shows model-vs-human agreement across everything
+    already decided; disagreement is the most valuable signal the system
+    produces.
+  </p>
+</div>
+
+<section class="mb-10">
+  <div class="flex items-baseline gap-3 mb-4">
+    <h2 class="display text-xl">Awaiting review</h2>
+    <span class="chip chip-escalate">{{ queue|length }}</span>
+  </div>
+
+  {% if queue %}
+    <div class="space-y-4">
+      {% for r in queue %}
+      <div class="card p-6">
+        <div class="flex items-baseline gap-3">
+          <a class="link-accent display text-lg" href="/invoice/{{ r.invoice_number }}">{{ r.invoice_number }}</a>
+          <span class="chip chip-{{ r.corpus }}">{{ r.corpus }}</span>
+          <span class="text-slate-500 text-sm">{{ r.vendor_name or "(no vendor)" }}</span>
+          <span class="mono ml-auto text-sm">${{ "%.2f"|format(r.stated_total_usd or 0) }}</span>
+        </div>
+        <div class="prose text-sm mt-3 text-slate-700" style="max-width: 68ch;">
+          {{ r.rationale }}
+        </div>
+        <form method="post" action="/queue/{{ r.invoice_number }}" class="mt-4 flex flex-wrap items-center gap-2">
+          <input name="note" type="text" placeholder="clerk note (optional)"
+                 class="flex-1 border rounded px-3 py-2 text-sm min-w-64">
+          <button name="action" value="APPROVE" class="chip chip-approve px-4 py-2">approve</button>
+          <button name="action" value="REJECT"  class="chip chip-reject px-4 py-2">reject</button>
+          <button name="action" value="HOLD"    class="chip chip-low px-4 py-2">hold</button>
+        </form>
+      </div>
+      {% endfor %}
+    </div>
+  {% else %}
+    <div class="card p-8 text-center text-slate-500">
+      Nothing awaiting review. The clerk goes home early.
+    </div>
+  {% endif %}
+</section>
+
+{% if resolved %}
+<section>
+  <div class="flex items-baseline gap-3 mb-4">
+    <h2 class="display text-xl">Model vs human</h2>
+    <span class="text-sm text-slate-500">(resolved escalations)</span>
+  </div>
+  <table class="card w-full text-sm overflow-hidden">
+    <thead class="text-xs text-slate-500 uppercase">
+      <tr class="border-b">
+        <th class="text-left px-6 py-3">Invoice</th>
+        <th class="text-left px-6 py-3">Model said</th>
+        <th class="text-left px-6 py-3">Human said</th>
+        <th class="text-left px-6 py-3">Agreement</th>
+        <th class="text-left px-6 py-3">Human note</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in resolved %}
+      <tr class="border-b">
+        <td class="px-6 py-3"><a class="link-accent" href="/invoice/{{ r.invoice_number }}">{{ r.invoice_number }}</a></td>
+        <td class="px-6 py-3"><span class="chip chip-{{ r.outcome|lower }}">{{ r.outcome }}</span></td>
+        <td class="px-6 py-3"><span class="chip chip-{{ r.human_outcome|lower }}">{{ r.human_outcome }}</span></td>
+        <td class="px-6 py-3">
+          {% if r.outcome == r.human_outcome %}
+            <span class="text-slate-500">agree</span>
+          {% else %}
+            <span style="color:var(--red)">override</span>
+          {% endif %}
+        </td>
+        <td class="px-6 py-3 text-slate-600">—</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+{% endblock %}

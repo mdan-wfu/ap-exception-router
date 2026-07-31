@@ -50,5 +50,9 @@ eval-adversarial:
 		--ground-truth eval/ground_truth_adversarial.yaml \
 		--label "authored adversarial set"
 
+# FastAPI dashboard. Read-only over runs/audit.sqlite. Zero API calls.
+# Populate the audit store first with `make demo` and (optionally)
+# `make demo-adversarial`.
+# Boots at http://127.0.0.1:8000
 dashboard:
-	@echo "not yet implemented"
+	@LLM_MODE=replay HUMAN_GATE_MODE=demo .venv/bin/uvicorn src.ui.app:app --host 127.0.0.1 --port 8000 --reload
