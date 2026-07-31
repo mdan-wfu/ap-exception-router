@@ -106,6 +106,12 @@ class PriorInvoiceResult(BaseModel):
     model_config = _M
     invoice_number: str
     found: bool
+    # Distinguish "no prior submission of THIS invoice exists" from "the
+    # audit store is empty because nothing has ever run yet." The second
+    # answer is not evidence about the invoice — it's an infrastructure
+    # fact, and the Adjudicator should not treat it as a business fact.
+    # See DECISIONS.md for the INV-1004 bug this field addresses.
+    store_populated: bool
     semantic_hash: str | None
     stated_total_usd: Decimal | None
     source_file: str | None
