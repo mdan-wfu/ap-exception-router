@@ -1,0 +1,45 @@
+{
+  "content": "{\"note\": \"WidgetA line states $2,250 but 8 \\u00d7 $250 = $2,000. Total $9,712.50 sits just under the $10,000 approval threshold. Hold and confirm quantity, unit price, or line amount with the vendor before approving.\"}",
+  "fingerprint": {
+    "messages": [
+      {
+        "content": "# Scribe\n\nWrite a one-paragraph exception note for the AP clerk who will act on this invoice.\n\n## Register\n\nSpecific. Factual. No hedging. No \"based on the analysis\". No restating the finding list. It should read like a competent colleague's handoff note.\n\nModel:\n\n> *Line 3 requests 20 GadgetX; 5 in stock. Vendor has no prior orders. Recommend hold pending vendor confirmation.*\n\nNotes on the model:\n- Concrete numbers, not adjectives (\"20 GadgetX; 5 in stock\", not \"large quantity\").\n- One or two sentences.\n- Names the action the clerk should consider.\n- No mention of finding codes, severity levels, or system internals.\n\n## What you MUST NOT do\n\n- Restate the findings list.\n- Quote the Adjudicator's rationale.\n- Use words like \"critical\", \"flagged\", \"detected\", \"raised\". The clerk knows there is a finding; they need to know what to do next.\n- Use severity vocabulary (`HIGH`, `MEDIUM`, etc.).\n- Write more than three sentences.\n\n## Your output\n\n```\n{\n  \"note\": \"<one to three sentences, plain English>\"\n}\n```\n\n## The invoice, findings, and adjudicator decision\n\n### Invoice\n{\n  \"invoice_number\": \"INV-2001\",\n  \"invoice_number_raw\": \"ADV-2001\",\n  \"vendor_name\": \"Widgets Inc.\",\n  \"vendor_raw\": \"Widgets Inc.\",\n  \"vendor_claims\": [],\n  \"vendor_address\": null,\n  \"vendor_email\": null,\n  \"invoice_date\": \"2026-02-05\",\n  \"date_raw\": \"2026-02-05\",\n  \"due_date\": \"2026-02-20\",\n  \"due_date_raw\": \"2026-02-20\",\n  \"payment_terms\": \"Net 15\",\n  \"references\": [],\n  \"notes\": null,\n  \"line_items\": [\n    {\n      \"raw_item_name\": \"WidgetA\",\n      \"canonical_item\": \"WidgetA\",\n      \"quantity\": 8,\n      \"unit_price_usd\": \"250.0\",\n      \"unit_price_native\": \"250.0 USD\",\n      \"line_amount_usd\": \"2250.0\",\n      \"note\": null\n    },\n    {\n      \"raw_item_name\": \"WidgetB\",\n      \"canonical_item\": \"WidgetB\",\n      \"quantity\": 8,\n      \"unit_price_usd\": \"500.0\",\n      \"unit_price_native\": \"500.0 USD\",\n      \"line_amount_usd\": \"4000.0\",\n      \"note\": null\n    },\n    {\n      \"raw_item_name\": \"GadgetX\",\n      \"canonical_item\": \"GadgetX\",\n      \"quantity\": 4,\n      \"unit_price_usd\": \"750.0\",\n      \"unit_price_native\": \"750.0 USD\",\n      \"line_amount_usd\": \"3000.0\",\n      \"note\": null\n    }\n  ],\n  \"additional_charges\": [],\n  \"stated_subtotal_usd\": \"9250.0\",\n  \"stated_tax_usd\": \"462.5\",\n  \"stated_total_usd\": \"9712.5\",\n  \"currency\": \"USD\",\n  \"source_file\": \"invoice_2001.txt\",\n  \"source_format\": \"txt\",\n  \"corrections\": []\n}\n\n### Findings\n- AR-001 [MEDIUM] Line 0 (WidgetA): stated amount $2250.0 != 8 \u00d7 $250.0 = $2000.0\n- PO-002 [MEDIUM] Total $9712.5 sits within 5.00% below the $10000 threshold \u2014 potential structuring signature\n\n### Adjudicator decision\noutcome: ESCALATE\nrationale: Line 1 (WidgetA) has a $250 mismatch: the invoice states $2,250 but 8 \u00d7 $250.00 = $2,000 (AR-001). That needs a human to confirm whether quantity, unit price, or line amount is wrong before we pay. Separately, the $9,712.50 total sits just under the $10,000 approval threshold (PO-002), which is the near-threshold structuring band. Resolve the line-amount discrepancy with the vendor (and, if needed, confirm the total is intentional) before approving.\n",
+        "role": "user"
+      }
+    ],
+    "model": "grok-4.5",
+    "response_format": {
+      "json_schema": {
+        "name": "ScribeOutput",
+        "schema": {
+          "properties": {
+            "note": {
+              "title": "Note",
+              "type": "string"
+            }
+          },
+          "required": [
+            "note"
+          ],
+          "title": "ScribeOutput",
+          "type": "object"
+        }
+      },
+      "type": "json_schema"
+    },
+    "tools": null
+  },
+  "model_call": {
+    "cached_prompt_tokens": 128,
+    "completion_tokens": 64,
+    "latency_ms": 9829.964250326157,
+    "prompt_name": "scribe",
+    "prompt_tokens": 1253,
+    "reasoning_tokens": 585,
+    "requested_model": "grok-4.5",
+    "resolved_model": "grok-4.5",
+    "system_fingerprint": "fp_a39489019fa99b6e",
+    "timestamp": "2026-07-31T15:28:23.714083Z"
+  },
+  "tool_calls": []
+}
