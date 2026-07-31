@@ -627,3 +627,17 @@ The DP-002 finding says the two files exist. `get_prior_invoice` says no prior p
 2026-07-31
 
 ---
+
+**Decision (Phase 8 observability):** JSONL log path is written silently — not printed to stdout. Manifest timestamp appears only in the JSONL file, not in the CLI header.
+**Alternatives considered:** (a) print the path so reviewers can see it — timestamp in the path breaks the byte-identical determinism check the demo relies on; (b) print the path with `--verbose` — extra flag noise for a file trivially found via `ls runs/*.jsonl`.
+**Why:** Two invariants collide. The demo must be byte-identical run-to-run so a reviewer can confirm nothing broke since Phase 7. The JSONL file must be timestamped so a reviewer can distinguish runs on disk. Splitting them — timestamped filename, silent about it in stdout — preserves both. The manifest itself keeps the timestamp inside the file for provenance.
+2026-07-31
+
+---
+
+**Decision (Phase 8 deferred):** `runs.started_at` remains unpopulated in the audit store. The `finished_at` column plus the JSONL `elapsed_seconds` field cover the per-invoice wall-clock need.
+**Alternatives considered:** Have `route_outcome` or the graph entry stamp `started_at` from state. The stamping would need a new GraphState field seeded at `main.py`, threaded through, and written by the route node — a change with cassette risk if any node reads the timestamped state into an LLM message.
+**Why:** Populating it now buys almost nothing for the current corpus (all invoices replay in < 1 s) and creates the very risk this phase is meant to avoid. Real wall-clock matters only for live runs and lands cheaply in Phase 9 alongside the eval harness, which will re-record anyway.
+2026-07-31
+
+---

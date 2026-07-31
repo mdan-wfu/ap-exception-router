@@ -155,9 +155,11 @@ Each is pure: `(Invoice, reference) -> list[Finding]`.
 - [x] Distribution reconciliation: 4/10/2 at Adjudicator boundary → 5 PAID / 4 REJECTED / 7 HOLD after demo human gate. Every divergence from original expectation defended per-invoice.
 
 ## Phase 8 — Observability
-- [ ] Structured JSON run logs alongside `rich` output
-- [ ] Per-run cost and latency rollup
+- [x] Structured JSON run logs alongside `rich` output — `runs/batch-YYYYMMDDTHHMMSS.jsonl`, manifest line + one line per invoice (outcome, findings, nodes fired, per-model-call token breakdown, tool calls with latency, cost, wall clock, terminal_status)
+- [x] Per-run cost and latency rollup — already surfaced in the CLI batch summary and JSONL records; per-invoice-per-node query verified against the Phase 6 audit schema (no schema change needed)
 - [x] `make report` prints corpus-level stats: outcome distribution, straight-through rate, queue depth, exceptions by category, cost by node type, token breakdown, per-invoice cost (pulled forward from Phase 8 into Phase 7 since audit schema was ready)
+- [x] Manifest header at run start: model, mode, cassette count, config constants (threshold / tolerances / FX with as-of / caps / human-gate mode), git SHA + dirty flag
+- [x] Failure-path observability locked in with tests: cache-miss includes key + fix hint; circuit-breaker names cap value + prompt_name; no-decision path lands FAILED terminal_status with reason, persists to audit store when invoice present
 
 ## Phase 9 — Evaluation
 - [ ] `eval/ground_truth.yaml` — every invoice, every field, expected findings, expected decision. Derive INV-1011/1012/1013 from `generate_pdfs.py` source literals, not from reading the rendered PDFs
