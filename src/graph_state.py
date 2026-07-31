@@ -57,6 +57,16 @@ class GraphState(TypedDict, total=False):
     # Scribe output — the human-facing note (None on APPROVE)
     scribe_note: str | None
 
+    # Human gate — stored SEPARATELY from `decision`. Never overwrites the
+    # model's outcome; the disagreement between them is evidence.
+    human_outcome: str | None      # "APPROVE" | "REJECT" | None
+    human_note: str | None
+    human_queued: bool             # True if the run is parked for a human
+
+    # Settlement outcome (human-readable summary written by settle node)
+    settlement_result: str | None
+    mock_payment_reference: str | None
+
     # Trace — one entry per node in the order they fired
     nodes_fired: Annotated[list[str], operator.add]
     # LLM + tool call traces accumulate across every node that uses them

@@ -63,5 +63,6 @@ def _run_with_seed(
         "critic_challenges": [],
         "critic_rounds": 0,
         "tool_result_cache": {},
+        "human_queued": False,
     }
     return graph.invoke(initial, config=config)

@@ -7,14 +7,17 @@ Node sequence:
 
     triage → validate → policy_gate → adjudicate →
         route_after_adjudicate:
-            → critique → adjudicate  (up to MAX_CRITIC_ROUNDS)
-            → scribe (if ESCALATE / REJECT) → route_outcome → END
-            → route_outcome (if APPROVE) → END
+            → critique → adjudicate           (up to MAX_CRITIC_ROUNDS)
+            → scribe (ESCALATE / REJECT)      → route_after_scribe:
+                                                    → human_gate (ESCALATE)
+                                                        → settle → route_outcome → END
+                                                    → settle (REJECT)   → route_outcome → END
+            → settle (APPROVE)                → route_outcome → END
 
 The critic conditional fires when CLAUDE.md §4 CRITIC_TRIGGER holds
-(stated_total > threshold OR any HIGH+ finding) and the rounds cap is
-not exhausted. The scribe runs only for ESCALATE / REJECT — APPROVE
-needs no human-facing note.
+(stated_total > threshold OR any HIGH+ finding). Scribe runs only for
+ESCALATE / REJECT. Human gate fires only for ESCALATE — three modes:
+interactive / demo (fixture) / queue (audit-store write, no resume).
 """
 from __future__ import annotations
 
@@ -28,9 +31,11 @@ from src.config import APPROVAL_THRESHOLD_USD, MAX_CRITIC_ROUNDS
 from src.graph_state import GraphState
 from src.nodes.adjudicate import adjudicate
 from src.nodes.critique import critique
+from src.nodes.human_gate import human_gate
 from src.nodes.policy_gate import policy_gate
 from src.nodes.route_outcome import route_outcome
 from src.nodes.scribe import scribe
+from src.nodes.settle import settle
 from src.nodes.triage import triage
 from src.nodes.validate import validate
 from src.schema import Outcome, Severity
@@ -62,10 +67,20 @@ def route_after_adjudicate(state: GraphState) -> str:
 
 
 def _post_critic_target(state: GraphState) -> str:
+    """After the critic loop terminates, route based on the model's outcome.
+    ESCALATE / REJECT → scribe; APPROVE → straight to settle."""
     decision = state.get("decision")
     if decision is not None and decision.outcome in (Outcome.ESCALATE, Outcome.REJECT):
         return "scribe"
-    return "route_outcome"
+    return "settle"
+
+
+def route_after_scribe(state: GraphState) -> str:
+    """After scribe writes its note: ESCALATE → human_gate, REJECT → settle."""
+    decision = state.get("decision")
+    if decision is not None and decision.outcome == Outcome.ESCALATE:
+        return "human_gate"
+    return "settle"
 
 
 def _critic_trigger(state: GraphState) -> bool:
@@ -91,6 +106,8 @@ def build_graph(checkpointer_path: Path | str | None = "runs/checkpoints.sqlite"
     g.add_node("adjudicate", adjudicate)
     g.add_node("critique", critique)
     g.add_node("scribe", scribe)
+    g.add_node("human_gate", human_gate)
+    g.add_node("settle", settle)
     g.add_node("route_outcome", route_outcome)
 
     g.add_edge(START, "triage")
@@ -104,11 +121,18 @@ def build_graph(checkpointer_path: Path | str | None = "runs/checkpoints.sqlite"
         {
             "critique": "critique",
             "scribe": "scribe",
-            "route_outcome": "route_outcome",
+            "settle": "settle",
         },
     )
     g.add_edge("critique", "adjudicate")
-    g.add_edge("scribe", "route_outcome")
+
+    g.add_conditional_edges(
+        "scribe",
+        route_after_scribe,
+        {"human_gate": "human_gate", "settle": "settle"},
+    )
+    g.add_edge("human_gate", "settle")
+    g.add_edge("settle", "route_outcome")
     g.add_edge("route_outcome", END)
 
     if checkpointer_path is None:
@@ -133,5 +157,6 @@ def run_one(source_path: str, graph=None, thread_id: str | None = None) -> Graph
         "critic_challenges": [],
         "critic_rounds": 0,
         "tool_result_cache": {},
+        "human_queued": False,
     }
     return graph.invoke(initial, config=config)

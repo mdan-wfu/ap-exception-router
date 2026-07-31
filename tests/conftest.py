@@ -87,17 +87,29 @@ def _synth_for(schema_cls):
 
 
 @pytest.fixture
-def graph_llm_fake(monkeypatch):
-    """Install the fake provider and RAISE the per-invoice circuit-breaker caps
-    for the duration of one test.
+def graph_llm_fake(monkeypatch, tmp_path):
+    """Install the fake provider, raise circuit-breaker caps, force the
+    human gate into demo mode, and isolate the audit store for the duration
+    of one test.
 
-    Rationale: the fake provider spends 2 model calls per agent node
-    (investigation turn 1 + synthesis), so a two-round critic loop consumes
-    more than the live-run cap of 8. Graph structural tests need the loop to
-    complete; the breaker is meant to guard real spend, not the fake."""
+    Isolation matters: the graph now writes to the audit store in route_outcome
+    and settle. Without a per-test store, tests would accumulate state across
+    runs and leak into `get_prior_invoice` results.
+    """
     from src.llm import agent_loop
     monkeypatch.setattr(agent_loop, "MAX_MODEL_CALLS_PER_INVOICE", 999)
     monkeypatch.setattr(agent_loop, "MAX_TOOL_CALLS_PER_INVOICE", 999)
+
+    # Force demo mode so human_gate never blocks on stdin
+    monkeypatch.setenv("HUMAN_GATE_MODE", "demo")
+
+    # Isolate the audit store to a temp file per test
+    from src.config import AUDIT_DB_PATH
+    from src import config as cfg_mod
+    from src.store import audit as audit_mod
+    isolated_db = tmp_path / "audit.sqlite"
+    monkeypatch.setattr(cfg_mod, "AUDIT_DB_PATH", isolated_db)
+    monkeypatch.setattr(audit_mod, "AUDIT_DB_PATH", isolated_db)
 
     original = None
     try:
