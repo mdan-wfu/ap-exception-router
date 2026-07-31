@@ -136,7 +136,7 @@ Heuristic. Reads the **raw source file**, not the extracted Invoice. Expected fa
 Deterministic checks that exist but produced no findings on any of the 16 corpus invoices. Recorded here so an incomplete corpus does not read as an incomplete validator suite.
 
 - **`AR-001`** (line total ≠ qty × price) — no corpus invoice states a line amount that fails this check.
-- **`AR-003`** (stated tax ≠ subtotal × rate) — never fired. INV-1010 was the scenario of concern (states a tax amount with no rate) and correctly did *not* trip.
+- **`AR-003`** (stated tax ≠ subtotal × rate) — **documented but not implemented.** The taxonomy row above describes the intended check; `src/validators/arithmetic.py` never calls it. Phase 4 declined implementation on the grounds that inferring a tax rate to flag it manufactures findings (the module docstring records this decision). Phase 10's adversarial exercise confirmed the gap by construction — an authored invoice with a deliberate tax-rate mismatch (subtotal 3500, rate 8%, stated tax 210 vs expected 280) trips no finding. Implementation deferred: it requires adding `tax_rate` to the Invoice schema, updating every adapter to parse it, wiring a validator check, and re-recording cassettes (a downstream context change). Table row above kept as-is to avoid altering the `get_policy` extraction surface (see `tests/test_taxonomy_frozen.py`).
 - **`PR-002`** (unit price below reference by > 5%) — INV-1013's volume-discount lines were closer than 5% to reference and did not trip.
 - Every other code fired at least once. See the "Corpus" column above for the exercising invoice.
 

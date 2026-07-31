@@ -691,3 +691,12 @@ The DP-002 finding says the two files exist. `get_prior_invoice` says no prior p
 2026-07-31
 
 ---
+
+**Decision (Phase 10 clarification — ground-truth trail for INV-2002):** The single commit `8df41da` created `eval/ground_truth_adversarial.yaml` with `must_fire: []` and `may_fire: [AR-003]` for INV-2002 from the outset. That was authored FIRST, and the live run was confirmation.
+
+Sequence: while designing ADV-2002 I grepped `src/validators/arithmetic.py` for `AR-003` (empty result) and then for `AR-\|tax_rate\|_tax\b` (AR-003 absent from the AR- list). The module docstring explicitly noted "we do not have tax_rate on the schema; we approximate by checking tax as a component of the grand-total sum, not as an independent check." So the ground truth was written knowing the check was unimplemented — `may_fire` rather than `must_fire` was the honest classification, and the yaml comment stated the reason plainly.
+
+Case (a) — not (b): no post-run correction. Prior wording in `docs/eval-results.md` and the earlier DECISIONS entry called the outcome a "discovery" and said the exercise "surfaced" the gap — that oversells it. The exercise CONFIRMED, by an observable authored case, an implementation gap I had already read out of the validator source. The value is that the confirmation is now in a committed artifact anyone can rerun, not that the gap was previously unknown to the author.
+2026-07-31
+
+---
