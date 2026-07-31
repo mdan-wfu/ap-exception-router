@@ -8,55 +8,125 @@
 <script defer src="https://unpkg.com/alpinejs@3.14.1/dist/cdn.min.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&display=swap" rel="stylesheet">
 <style>
+  /* Dark surface, internal-financial-tool aesthetic. CLAUDE.md §3b:
+     slate-900 primary, blue accent for interactive elements only,
+     amber for warnings. Playfair for hero numerics + section titles,
+     Georgia for prose, system sans for UI chrome. */
   :root {
-    --ink: #0f172a;
-    --accent: #1d4ed8;
-    --amber: #d97706;
-    --amber-bg: #fef3c7;
-    --green: #15803d;
-    --green-bg: #dcfce7;
-    --red: #b91c1c;
-    --red-bg: #fee2e2;
-    --line: #e2e8f0;
-    --muted: #64748b;
-    --paper: #ffffff;
-    --bg: #f8fafc;
+    --ink-0: #020617;    /* deepest — page bg */
+    --ink-1: #0f172a;    /* slate-900 — surface bg */
+    --ink-2: #1e293b;    /* slate-800 — cards */
+    --ink-3: #334155;    /* slate-700 — subtle borders */
+    --ink-4: #475569;    /* slate-600 — muted borders */
+    --text: #e2e8f0;
+    --text-mute: #94a3b8;
+    --text-dim: #64748b;
+    --accent: #3b82f6;   /* blue-500 — interactive */
+    --accent-hi: #60a5fa;
+    --amber: #f59e0b;
+    --amber-dim: #78350f;
+    --green: #10b981;
+    --green-dim: #064e3b;
+    --red: #ef4444;
+    --red-dim: #7f1d1d;
+    --violet: #a78bfa;
   }
-  html, body { background: var(--bg); color: var(--ink); }
-  body { font-family: system-ui, -apple-system, "Helvetica Neue", sans-serif; }
-  .display { font-family: "Playfair Display", Georgia, serif; letter-spacing: -0.01em; }
-  .prose { font-family: Georgia, "Times New Roman", serif; line-height: 1.7; }
-  .card { background: var(--paper); border: 1px solid var(--line); border-radius: 6px; }
-  .chip { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 11px; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; }
-  .chip-approve  { background: var(--green-bg); color: var(--green); }
-  .chip-reject   { background: var(--red-bg);   color: var(--red); }
-  .chip-escalate { background: var(--amber-bg); color: var(--amber); }
-  .chip-info     { background: #e0e7ff;         color: #3730a3; }
-  .chip-critical { background: var(--red-bg);   color: var(--red); }
-  .chip-high     { background: var(--amber-bg); color: var(--amber); }
-  .chip-medium   { background: #fef3c7;         color: #92400e; }
-  .chip-low      { background: #f1f5f9;         color: var(--muted); }
-  .chip-provided { background: #e0e7ff;         color: #3730a3; }
-  .chip-adversarial { background: #fce7f3;      color: #9d174d; }
-  .link-accent { color: var(--accent); }
-  .link-accent:hover { text-decoration: underline; }
-  .divider { border-top: 1px solid var(--line); }
-  code, .mono { font-family: "SF Mono", ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
-  .code-panel { background: #0f172a; color: #e2e8f0; }
+  html, body {
+    background: var(--ink-0);
+    color: var(--text);
+    font-feature-settings: "cv02","cv03","cv04","cv11";
+  }
+  body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 14px; }
+  .display { font-family: "Playfair Display", Georgia, serif; letter-spacing: -0.015em; font-weight: 500; }
+  .display-bold { font-weight: 700; }
+  .prose { font-family: Georgia, "Times New Roman", serif; line-height: 1.7; color: var(--text); }
+  .mono, code { font-family: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
+
+  /* Panels — darker, real borders, no floating shadow. */
+  .panel { background: var(--ink-1); border: 1px solid var(--ink-3); border-radius: 4px; }
+  .panel-strong { border-color: var(--ink-4); }
+  .panel-header { border-bottom: 1px solid var(--ink-3); padding: 14px 20px; }
+  .panel-body { padding: 20px; }
+  .rule { border-top: 1px solid var(--ink-3); }
+
+  /* Chips */
+  .chip { display: inline-block; padding: 3px 10px; border-radius: 3px; font-size: 10.5px;
+          font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; border: 1px solid transparent; }
+  .chip-approve  { color: var(--green); border-color: var(--green-dim); background: rgba(16,185,129,.08); }
+  .chip-reject   { color: var(--red);   border-color: var(--red-dim);   background: rgba(239,68,68,.08); }
+  .chip-escalate { color: var(--amber); border-color: var(--amber-dim); background: rgba(245,158,11,.08); }
+  .chip-hold     { color: var(--violet); border-color: #4c1d95;        background: rgba(167,139,250,.08); }
+  .chip-info     { color: var(--accent); border-color: #1e3a8a;        background: rgba(59,130,246,.08); }
+  .chip-critical { color: var(--red); border-color: var(--red); background: rgba(239,68,68,.12); }
+  .chip-high     { color: var(--amber); border-color: var(--amber); background: rgba(245,158,11,.08); }
+  .chip-medium   { color: #fbbf24; border-color: #78350f; background: rgba(251,191,36,.06); }
+  .chip-low      { color: var(--text-mute); border-color: var(--ink-4); background: transparent; }
+  .chip-provided { color: var(--accent); border-color: #1e3a8a; background: rgba(59,130,246,.06); }
+  .chip-adversarial { color: #f472b6; border-color: #831843; background: rgba(244,114,182,.06); }
+  .chip-auto     { color: var(--text-mute); border-color: var(--ink-3); background: rgba(148,163,184,.06); font-style: italic; }
+  .chip-amended  { color: var(--violet); border-color: #4c1d95; background: rgba(167,139,250,.10); }
+
+  /* Links */
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { color: var(--accent-hi); text-decoration: underline; text-underline-offset: 3px; }
+
+  /* Nav */
+  .nav-tab { padding: 10px 4px; color: var(--text-mute); font-size: 13px;
+             border-bottom: 2px solid transparent; transition: border-color 120ms, color 120ms; text-decoration: none; }
+  .nav-tab:hover { color: var(--text); text-decoration: none; }
+  .nav-tab.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+
+  /* Tables */
+  table.data { width: 100%; font-size: 13px; }
+  table.data thead th { text-align: left; color: var(--text-dim); text-transform: uppercase;
+                        font-size: 10.5px; letter-spacing: 0.06em; font-weight: 600;
+                        padding: 10px 20px; border-bottom: 1px solid var(--ink-3); }
+  table.data tbody td { padding: 12px 20px; border-bottom: 1px solid var(--ink-2); }
+  table.data tbody tr:hover { background: rgba(59,130,246,.04); }
+
+  /* Forms */
+  input[type=text], input[type=file], textarea, select {
+    background: var(--ink-2); border: 1px solid var(--ink-3); color: var(--text);
+    padding: 8px 10px; border-radius: 3px; font-size: 13px;
+  }
+  input[type=text]:focus, textarea:focus, select:focus {
+    outline: none; border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent);
+  }
+  button.btn {
+    padding: 8px 14px; border-radius: 3px; font-size: 12px; font-weight: 600; letter-spacing: 0.02em;
+    border: 1px solid var(--ink-3); background: var(--ink-2); color: var(--text); cursor: pointer;
+    transition: border-color 120ms, background 120ms;
+  }
+  button.btn:hover { border-color: var(--accent); background: rgba(59,130,246,.08); }
+  button.btn-approve { color: var(--green); border-color: var(--green-dim); }
+  button.btn-approve:hover { background: rgba(16,185,129,.12); border-color: var(--green); }
+  button.btn-reject  { color: var(--red);   border-color: var(--red-dim); }
+  button.btn-reject:hover { background: rgba(239,68,68,.12); border-color: var(--red); }
+  button.btn-hold    { color: var(--violet); border-color: #4c1d95; }
+  button.btn-hold:hover { background: rgba(167,139,250,.12); border-color: var(--violet); }
+  button.btn-danger  { color: var(--red); border-color: var(--red-dim); }
+  button.btn-danger:hover { background: rgba(239,68,68,.10); border-color: var(--red); }
+
+  .code-panel { background: var(--ink-0); color: var(--text); border: 1px solid var(--ink-3); border-radius: 3px; }
+  [x-cloak] { display: none !important; }
 </style>
 </head>
 <body>
-<header class="border-b bg-white">
-  <div class="max-w-7xl mx-auto px-8 py-6 flex items-baseline justify-between">
+<header style="border-bottom: 1px solid var(--ink-3); background: var(--ink-1);">
+  <div class="max-w-7xl mx-auto px-8 py-5 flex items-baseline justify-between">
     <div>
-      <a href="/" class="display text-2xl">AP Exception Router</a>
-      <p class="text-sm text-slate-500 mt-0.5">Acme Corp — post-run audit view</p>
+      <a href="/" class="display display-bold text-2xl" style="color: var(--text);">AP Exception Router</a>
+      <span class="ml-3 text-xs" style="color: var(--text-dim);">Acme Corp · post-run audit view</span>
     </div>
-    <nav class="text-sm space-x-6">
-      <a class="link-accent" href="/">Queue</a>
-      <a class="link-accent" href="/queue">Human review</a>
+    <nav class="flex items-center gap-6">
+      {% set active = active_nav|default('queue') %}
+      <a href="/"       class="nav-tab {% if active == 'queue'  %}active{% endif %}">Queue</a>
+      <a href="/queue"  class="nav-tab {% if active == 'review' %}active{% endif %}">Human review</a>
+      <a href="/held"   class="nav-tab {% if active == 'held'   %}active{% endif %}">Held</a>
+      <a href="/upload" class="nav-tab {% if active == 'upload' %}active{% endif %}">Add invoice</a>
+      <a href="/codes"  class="nav-tab {% if active == 'codes'  %}active{% endif %}">Codes</a>
     </nav>
   </div>
 </header>
@@ -65,8 +135,11 @@
 {% block content %}{% endblock %}
 </main>
 
-<footer class="max-w-7xl mx-auto px-8 py-10 text-xs text-slate-400 border-t mt-16">
-  Reads runs/audit.sqlite. Zero API calls at page load. LLM_MODE=replay throughout.
+<footer class="max-w-7xl mx-auto px-8 py-8 mt-16" style="border-top: 1px solid var(--ink-3); color: var(--text-dim);">
+  <div class="flex items-center justify-between text-xs">
+    <span>Reads runs/audit.sqlite. Zero API calls at page load. LLM_MODE=replay forced.</span>
+    <span class="mono">grok-4.5</span>
+  </div>
 </footer>
 </body>
 </html>

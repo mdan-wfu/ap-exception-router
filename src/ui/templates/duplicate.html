@@ -3,9 +3,9 @@
 {% block content %}
 
 <div class="mb-8">
-  <a class="text-sm link-accent" href="/">← queue</a>
-  <h1 class="display text-4xl mt-3">{{ invoice_number }} — duplicate submission diff</h1>
-  <p class="prose text-slate-700 mt-4 max-w-3xl">
+  <a class="text-sm" href="/">← queue</a>
+  <h1 class="display display-bold text-4xl mt-3">{{ invoice_number }} — duplicate submission diff</h1>
+  <p class="prose text-sm mt-4 max-w-3xl" style="color: var(--text-mute);">
     Two files carry the same invoice number, with <strong>different content</strong>.
     The question the human must answer is plain:
     <em>does R1 supersede the original, or is this a double-billing attempt?</em>
@@ -17,111 +17,108 @@
 
 <div class="grid grid-cols-2 gap-6 mb-8">
   {% for e in entries %}
-  <div class="card">
-    <div class="p-4 border-b bg-slate-50">
+  <div class="panel">
+    <div class="panel-header">
       <div class="flex items-baseline gap-3">
-        <h3 class="display text-lg">
+        <h3 class="display text-base">
           {% if 'revised' in e.source_file %}Revised (R1){% else %}Original{% endif %}
         </h3>
-        <span class="mono text-xs text-slate-500">{{ e.source_file }}</span>
+        <span class="mono text-xs" style="color: var(--text-dim);">{{ e.source_file }}</span>
       </div>
     </div>
-    <div class="p-6 text-sm">
+    <div class="panel-body text-sm">
       {% if e.extraction_error %}
-        <div class="mb-4 p-3 rounded text-xs" style="background: var(--amber-bg); color: var(--amber);">
-          Extraction unavailable — {{ e.extraction_error }}. Diff shows only what the sibling could recover.
+        <div class="mb-4 p-3 rounded text-xs" style="background: rgba(245,158,11,.08); color: var(--amber); border: 1px solid var(--amber-dim);">
+          Extraction unavailable — {{ e.extraction_error }}. Diff shows only what the sibling recovered.
         </div>
       {% endif %}
       {% if e.invoice %}
       <dl class="grid grid-cols-3 gap-y-2">
-        <dt class="text-slate-500">Vendor</dt>
+        <dt style="color: var(--text-dim);">Vendor</dt>
         <dd class="col-span-2">{{ e.invoice.vendor_name }}</dd>
-        <dt class="text-slate-500">Date</dt>
+        <dt style="color: var(--text-dim);">Date</dt>
         <dd class="col-span-2 mono">{{ e.invoice.invoice_date }}</dd>
-        <dt class="text-slate-500">Due</dt>
+        <dt style="color: var(--text-dim);">Due</dt>
         <dd class="col-span-2 mono">{{ e.invoice.due_date }}</dd>
-        <dt class="text-slate-500">Terms</dt>
+        <dt style="color: var(--text-dim);">Terms</dt>
         <dd class="col-span-2">{{ e.invoice.payment_terms }}</dd>
-        <dt class="text-slate-500">Line items</dt>
+        <dt style="color: var(--text-dim);">Line items</dt>
         <dd class="col-span-2 mono">{{ e.invoice.line_items|length }}</dd>
-        <dt class="text-slate-500">Subtotal</dt>
+        <dt style="color: var(--text-dim);">Subtotal</dt>
         <dd class="col-span-2 mono">${{ "%.2f"|format(e.invoice.stated_subtotal.amount_usd) if e.invoice.stated_subtotal else "—" }}</dd>
-        <dt class="text-slate-500">Tax</dt>
+        <dt style="color: var(--text-dim);">Tax</dt>
         <dd class="col-span-2 mono">${{ "%.2f"|format(e.invoice.stated_tax.amount_usd) if e.invoice.stated_tax else "—" }}</dd>
-        <dt class="text-slate-500">Total</dt>
-        <dd class="col-span-2 mono display text-lg" style="color:var(--accent)">${{ "%.2f"|format(e.invoice.stated_total.amount_usd) }}</dd>
-        {% if e.invoice.references %}
-          <dt class="text-slate-500">References</dt>
-          <dd class="col-span-2 text-slate-700">{{ e.invoice.references|join(", ") }}</dd>
-        {% endif %}
-        {% if e.invoice.notes %}
-          <dt class="text-slate-500">Notes</dt>
-          <dd class="col-span-2 text-slate-700 italic">{{ e.invoice.notes }}</dd>
-        {% endif %}
+        <dt style="color: var(--text-dim);">Total</dt>
+        <dd class="col-span-2 display display-bold text-lg" style="color: var(--accent);">${{ "%.2f"|format(e.invoice.stated_total.amount_usd) }}</dd>
+        {% if e.invoice.references %}<dt style="color: var(--text-dim);">References</dt>
+          <dd class="col-span-2" style="color: var(--text-mute);">{{ e.invoice.references|join(", ") }}</dd>{% endif %}
+        {% if e.invoice.notes %}<dt style="color: var(--text-dim);">Notes</dt>
+          <dd class="col-span-2 italic" style="color: var(--text-mute);">{{ e.invoice.notes }}</dd>{% endif %}
       </dl>
-
       <div class="mt-6">
-        <div class="text-xs text-slate-500 uppercase tracking-wide mb-2">Line items</div>
+        <div class="text-xs uppercase tracking-wider mb-2" style="color: var(--text-dim);">Line items</div>
         <table class="w-full text-xs">
-          <thead class="text-slate-500 uppercase">
-            <tr><th class="text-left py-1">Item</th><th class="text-right py-1">Qty</th>
-                <th class="text-right py-1">Unit</th><th class="text-right py-1">Line</th></tr>
-          </thead>
+          <thead><tr>
+            <th class="text-left py-1" style="color: var(--text-dim);">Item</th>
+            <th class="text-right py-1" style="color: var(--text-dim);">Qty</th>
+            <th class="text-right py-1" style="color: var(--text-dim);">Unit</th>
+            <th class="text-right py-1" style="color: var(--text-dim);">Line</th>
+          </tr></thead>
           <tbody>
-            {% for li in e.invoice.line_items %}
-            <tr class="border-t border-slate-100">
-              <td class="py-1 mono">{{ li.canonical_item or li.raw_item_name }}</td>
-              <td class="py-1 text-right mono">{{ li.quantity }}</td>
-              <td class="py-1 text-right mono">${{ "%.2f"|format(li.unit_price.amount_usd) }}</td>
-              <td class="py-1 text-right mono">${{ "%.2f"|format(li.line_amount.amount_usd) if li.line_amount else (li.quantity * li.unit_price.amount_usd) }}</td>
-            </tr>
-            {% endfor %}
+          {% for li in e.invoice.line_items %}
+          <tr style="border-top: 1px solid var(--ink-3);">
+            <td class="py-1 mono">{{ li.canonical_item or li.raw_item_name }}</td>
+            <td class="py-1 text-right mono">{{ li.quantity }}</td>
+            <td class="py-1 text-right mono">${{ "%.2f"|format(li.unit_price.amount_usd) }}</td>
+            <td class="py-1 text-right mono">${{ "%.2f"|format(li.line_amount.amount_usd) if li.line_amount else (li.quantity * li.unit_price.amount_usd) }}</td>
+          </tr>
+          {% endfor %}
           </tbody>
         </table>
       </div>
       {% else %}
-        <p class="text-sm text-slate-500 italic">Sibling file details not renderable — see banner above.</p>
+        <p class="text-sm italic" style="color: var(--text-mute);">Sibling file details not renderable — see banner above.</p>
       {% endif %}
     </div>
   </div>
   {% endfor %}
 </div>
 
-<section class="card mb-8 p-6" style="border-color: var(--red);">
-  <h3 class="display text-lg mb-3" style="color:var(--red)">System findings</h3>
-  {% if dp_findings %}
+<section class="panel mb-8" style="border-color: var(--red-dim);">
+  <div class="panel-header" style="color: var(--red);"><h3 class="display text-base">System findings</h3></div>
+  <div class="panel-body">
+    {% if dp_findings %}
     <div class="space-y-3">
       {% for f in dp_findings %}
       <div class="text-sm">
         <span class="chip chip-{{ f.severity|lower }}">{{ f.severity }}</span>
         <span class="mono ml-2">{{ f.code }}</span>
         <span class="ml-2">{{ f.message }}</span>
-        {% if f.evidence %}<div class="text-xs text-slate-500 mono mt-1">{{ f.evidence }}</div>{% endif %}
+        {% if f.evidence %}<div class="text-xs mono mt-1" style="color: var(--text-dim);">{{ f.evidence }}</div>{% endif %}
       </div>
       {% endfor %}
     </div>
-  {% endif %}
-  {% if run %}
-  <div class="mt-6 divider pt-4">
-    <div class="text-xs text-slate-500 uppercase tracking-wide mb-2">Adjudicator rationale</div>
-    <div class="prose text-sm">{{ run.rationale }}</div>
+    {% endif %}
+    {% if run %}
+    <div class="mt-6 pt-4 rule">
+      <div class="text-xs uppercase tracking-wider mb-2" style="color: var(--text-dim);">Adjudicator rationale</div>
+      <div class="prose text-sm">{{ run.rationale }}</div>
+    </div>
+    {% endif %}
   </div>
-  {% endif %}
 </section>
 
-<section class="card p-6" style="background: #fef3c7; border-color: var(--amber);">
-  <h3 class="display text-lg mb-2" style="color: var(--amber)">Human must confirm</h3>
+<section class="panel panel-body" style="background: rgba(245,158,11,.04); border-color: var(--amber-dim);">
+  <h3 class="display text-base mb-2" style="color: var(--amber);">Human must confirm</h3>
   <ul class="text-sm space-y-1 list-disc pl-5">
     <li>Was the revised submission authorized by procurement?</li>
     <li>Was the original ever paid? (audit store says no, but confirm with AR)</li>
     <li>If both are legitimate: void the original PO, settle the revised.</li>
     <li>If the revised is not authorized: reject and flag the vendor account.</li>
   </ul>
-  <div class="mt-4">
-    {% if run %}
-    <a class="link-accent text-sm" href="/invoice/{{ invoice_number }}">→ full run detail for {{ invoice_number }}</a>
-    {% endif %}
-  </div>
+  {% if run %}
+  <div class="mt-4"><a class="text-sm" href="/invoice/{{ invoice_number }}">→ full run detail for {{ invoice_number }}</a></div>
+  {% endif %}
 </section>
 
 {% endblock %}

@@ -4,260 +4,291 @@
 
 <div class="mb-8">
   <div class="flex items-center gap-3">
-    <a class="text-sm link-accent" href="/">← queue</a>
+    <a class="text-sm" href="/">← queue</a>
     <span class="chip chip-{{ run.corpus }}">{{ run.corpus }}</span>
-    <span class="chip chip-{{ run.outcome|lower }}">{{ run.outcome }}</span>
+    <span class="chip chip-{{ run.outcome|lower }}">model: {{ run.outcome }}</span>
     {% if run.human_outcome %}
       <span class="chip chip-{{ run.human_outcome|lower }}">human: {{ run.human_outcome }}</span>
     {% endif %}
-    {% if run.revision_occurred %}
-      <span class="chip chip-info">critic revised</span>
-    {% elif run.critic_challenge %}
-      <span class="chip chip-info">critic held</span>
+    {% if auto_resolved %}
+      <span class="chip chip-auto" title="{{ run.human_note }}">auto · demo fixture</span>
     {% endif %}
-    {% if run.guardrail_override_fired %}
-      <span class="chip chip-critical">§2.2 override</span>
+    {% if effective_outcome and effective_outcome != run.outcome and effective_outcome != run.human_outcome %}
+      <span class="chip chip-amended">amended → {{ effective_outcome }}</span>
     {% endif %}
+    {% if run.revision_occurred %}<span class="chip chip-info">critic revised</span>
+    {% elif run.critic_challenge %}<span class="chip chip-info">critic held</span>{% endif %}
+    {% if run.guardrail_override_fired %}<span class="chip chip-critical">§2.2 override</span>{% endif %}
   </div>
-  <h1 class="display text-4xl mt-3">{{ run.invoice_number }}</h1>
-  <p class="text-slate-600 mt-1">
+  <h1 class="display display-bold text-4xl mt-3">{{ run.invoice_number }}</h1>
+  <p class="text-sm mt-1" style="color: var(--text-mute);">
     {{ run.vendor_name or "(no vendor name extracted)" }} · ${{ "%.2f"|format(run.stated_total_usd or 0) }} {{ run.currency or "USD" }} · {{ run.source_format }} adapter
-    {% if run.invoice_number == "INV-1004" %}
-      · <a class="link-accent" href="/duplicate/INV-1004">see duplicate diff →</a>
-    {% endif %}
+    {% if run.invoice_number == "INV-1004" %} · <a href="/duplicate/INV-1004">see duplicate diff →</a>{% endif %}
   </p>
 </div>
 
+<!-- 1. Source ⟷ Extracted -->
 <div class="grid grid-cols-2 gap-6 mb-8">
-  <div class="card">
-    <div class="p-4 border-b flex items-baseline gap-3">
-      <h3 class="display text-lg">Source</h3>
-      <span class="text-xs text-slate-500">{{ run.source_file }}</span>
-      <span class="ml-auto text-xs text-slate-400">{{ extraction.adapter_used if extraction else "?" }} adapter{% if extraction and extraction.llm_fallback %} (LLM fallback){% endif %}</span>
+  <div class="panel">
+    <div class="panel-header flex items-baseline gap-3">
+      <h3 class="display text-base">Source</h3>
+      <span class="text-xs mono" style="color: var(--text-dim);">{{ run.source_file }}</span>
+      <span class="ml-auto text-xs" style="color: var(--text-dim);">{{ extraction.adapter_used if extraction else "?" }} adapter{% if extraction and extraction.llm_fallback %} (LLM fallback){% endif %}</span>
     </div>
-    <pre class="code-panel p-4 text-xs overflow-auto" style="max-height: 520px; white-space: pre-wrap;">{{ raw_source }}</pre>
+    <pre class="code-panel p-4 text-xs overflow-auto" style="max-height: 520px; white-space: pre-wrap; border: 0; border-radius: 0;">{{ raw_source }}</pre>
   </div>
-  <div class="card p-6">
-    <h3 class="display text-lg mb-4">Extracted</h3>
+  <div class="panel panel-body">
+    <h3 class="display text-base mb-4">Extracted</h3>
     {% if extraction_error %}
-      <div class="mb-4 p-3 rounded text-sm" style="background: var(--amber-bg); color: var(--amber);">
+      <div class="mb-4 p-3 rounded text-xs" style="background: rgba(245,158,11,.08); border: 1px solid var(--amber-dim); color: var(--amber);">
         <div class="font-semibold">Line-item detail unavailable</div>
-        <div class="text-xs mt-1 text-slate-700">Source file could not be re-extracted — {{ extraction_error }}. The audit-store record (findings, rationale, tool trace, cost) is unaffected and displayed below.</div>
+        <div class="mt-1" style="color: var(--text-mute);">Source not re-extractable — {{ extraction_error }}. The audit-store record (findings, rationale, tool trace, cost) is unaffected.</div>
       </div>
     {% endif %}
     {% if invoice %}
       <dl class="grid grid-cols-3 gap-y-3 text-sm">
-        <dt class="text-slate-500">Invoice #</dt>
-        <dd class="col-span-2 mono">{{ invoice.invoice_number }} <span class="text-slate-400">(raw: {{ invoice.invoice_number_raw }})</span></dd>
-        <dt class="text-slate-500">Vendor</dt>
+        <dt style="color: var(--text-dim);">Invoice #</dt>
+        <dd class="col-span-2 mono">{{ invoice.invoice_number }} <span style="color: var(--text-dim);">(raw: {{ invoice.invoice_number_raw }})</span></dd>
+        <dt style="color: var(--text-dim);">Vendor</dt>
         <dd class="col-span-2">{{ invoice.vendor_name or "(empty)" }}</dd>
-        {% if invoice.vendor_claims %}
-          <dt class="text-slate-500">Vendor claims</dt>
-          <dd class="col-span-2 text-slate-700">{{ invoice.vendor_claims|join(", ") }}</dd>
-        {% endif %}
-        {% if invoice.vendor_address %}
-          <dt class="text-slate-500">Address</dt>
-          <dd class="col-span-2 text-slate-700">{{ invoice.vendor_address }}</dd>
-        {% endif %}
-        <dt class="text-slate-500">Date</dt>
-        <dd class="col-span-2 mono">{{ invoice.invoice_date or "—" }}</dd>
-        <dt class="text-slate-500">Due</dt>
-        <dd class="col-span-2 mono">{{ invoice.due_date or "—" }} <span class="text-slate-400">(raw: {{ invoice.due_date_raw or "—" }})</span></dd>
-        <dt class="text-slate-500">Terms</dt>
-        <dd class="col-span-2">{{ invoice.payment_terms or "—" }}</dd>
-        <dt class="text-slate-500">Subtotal</dt>
+        {% if invoice.vendor_claims %}<dt style="color: var(--text-dim);">Vendor claims</dt>
+          <dd class="col-span-2" style="color: var(--text-mute);">{{ invoice.vendor_claims|join(", ") }}</dd>{% endif %}
+        {% if invoice.vendor_address %}<dt style="color: var(--text-dim);">Address</dt>
+          <dd class="col-span-2" style="color: var(--text-mute);">{{ invoice.vendor_address }}</dd>{% endif %}
+        <dt style="color: var(--text-dim);">Date</dt><dd class="col-span-2 mono">{{ invoice.invoice_date or "—" }}</dd>
+        <dt style="color: var(--text-dim);">Due</dt>
+        <dd class="col-span-2 mono">{{ invoice.due_date or "—" }} <span style="color: var(--text-dim);">(raw: {{ invoice.due_date_raw or "—" }})</span></dd>
+        <dt style="color: var(--text-dim);">Terms</dt><dd class="col-span-2">{{ invoice.payment_terms or "—" }}</dd>
+        <dt style="color: var(--text-dim);">Subtotal</dt>
         <dd class="col-span-2 mono">{{ ("$%.2f" % invoice.stated_subtotal.amount_usd) if invoice.stated_subtotal else "—" }}</dd>
-        <dt class="text-slate-500">Tax</dt>
+        <dt style="color: var(--text-dim);">Tax</dt>
         <dd class="col-span-2 mono">{{ ("$%.2f" % invoice.stated_tax.amount_usd) if invoice.stated_tax else "—" }}</dd>
-        <dt class="text-slate-500">Total</dt>
+        <dt style="color: var(--text-dim);">Total</dt>
         <dd class="col-span-2 mono">{{ ("$%.2f" % invoice.stated_total.amount_usd) if invoice.stated_total else "—" }} {{ invoice.stated_total.currency if invoice.stated_total else "" }}</dd>
-        <dt class="text-slate-500">Confidence</dt>
+        <dt style="color: var(--text-dim);">Confidence</dt>
         <dd class="col-span-2 text-sm">
           {% set conf = invoice.extraction_confidence %}
-          {% if conf is none %}
-            <span class="text-slate-400">not reported</span>
-          {% elif conf == 1.0 and run.source_format in ("json", "csv", "xml") %}
-            <span class="chip chip-info">1.00 — deterministic parse</span>
-          {% else %}
-            <span class="chip chip-medium">{{ "%.2f"|format(conf) }} — LLM self-reported</span>
-          {% endif %}
+          {% if conf is none %}<span style="color: var(--text-dim);">not reported</span>
+          {% elif conf == 1.0 and run.source_format in ("json","csv","xml") %}<span class="chip chip-info">1.00 · deterministic parse</span>
+          {% else %}<span class="chip chip-medium">{{ "%.2f"|format(conf) }} · LLM self-reported</span>{% endif %}
         </dd>
       </dl>
 
       {% if invoice.line_items %}
       <div class="mt-6">
-        <div class="text-xs text-slate-500 uppercase tracking-wide mb-2">Line items ({{ invoice.line_items|length }})</div>
+        <div class="text-xs uppercase tracking-wider mb-2" style="color: var(--text-dim);">Line items ({{ invoice.line_items|length }})</div>
         <table class="w-full text-xs">
-          <thead class="text-slate-500 uppercase text-xs">
-            <tr><th class="text-left py-1">Raw</th><th class="text-left py-1">Canonical</th>
-                <th class="text-right py-1">Qty</th><th class="text-right py-1">Unit $</th><th class="text-right py-1">Line $</th></tr>
-          </thead>
+          <thead><tr>
+            <th class="text-left py-1" style="color: var(--text-dim);">Raw</th>
+            <th class="text-left py-1" style="color: var(--text-dim);">Canonical</th>
+            <th class="text-right py-1" style="color: var(--text-dim);">Qty</th>
+            <th class="text-right py-1" style="color: var(--text-dim);">Unit $</th>
+            <th class="text-right py-1" style="color: var(--text-dim);">Line $</th>
+          </tr></thead>
           <tbody>
-            {% for li in invoice.line_items %}
-            <tr class="border-t border-slate-100">
-              <td class="py-1 mono">{{ li.raw_item_name }}</td>
-              <td class="py-1 mono text-slate-700">{{ li.canonical_item or "—" }}</td>
-              <td class="py-1 text-right mono">{{ li.quantity }}</td>
-              <td class="py-1 text-right mono">${{ "%.2f"|format(li.unit_price.amount_usd) }}</td>
-              <td class="py-1 text-right mono">{{ ("$%.2f" % li.line_amount.amount_usd) if li.line_amount else "—" }}</td>
-            </tr>
-            {% endfor %}
+          {% for li in invoice.line_items %}
+          <tr style="border-top: 1px solid var(--ink-3);">
+            <td class="py-1 mono">{{ li.raw_item_name }}</td>
+            <td class="py-1 mono" style="color: var(--text-mute);">{{ li.canonical_item or "—" }}</td>
+            <td class="py-1 text-right mono">{{ li.quantity }}</td>
+            <td class="py-1 text-right mono">${{ "%.2f"|format(li.unit_price.amount_usd) }}</td>
+            <td class="py-1 text-right mono">{{ ("$%.2f" % li.line_amount.amount_usd) if li.line_amount else "—" }}</td>
+          </tr>
+          {% endfor %}
           </tbody>
         </table>
       </div>
       {% endif %}
 
       {% if invoice.corrections %}
-      <div class="mt-6 border-l-4 border-amber-500 pl-4">
-        <div class="text-xs uppercase tracking-wide" style="color:var(--amber)">Extractor corrections ({{ invoice.corrections|length }})</div>
-        <div class="text-xs text-slate-500 mb-2">Silent repairs made during extraction — surfaced as EX-001.</div>
+      <div class="mt-6 pl-4" style="border-left: 3px solid var(--amber);">
+        <div class="text-xs uppercase tracking-wider" style="color: var(--amber);">Extractor corrections ({{ invoice.corrections|length }})</div>
+        <div class="text-xs mt-1" style="color: var(--text-dim);">Silent repairs surfaced as EX-001.</div>
         {% for c in invoice.corrections %}
-        <div class="text-sm py-1">
-          <span class="mono text-xs text-slate-500">{{ c.field_path }}:</span>
+        <div class="text-sm py-2">
+          <span class="mono text-xs" style="color: var(--text-dim);">{{ c.field_path }}:</span>
           <span class="mono">{{ c.original|tojson }}</span>
-          <span class="text-slate-400">→</span>
-          <span class="mono" style="color:var(--accent)">{{ c.corrected|tojson }}</span>
-          <div class="text-xs text-slate-500 ml-2">{{ c.reason }}</div>
+          <span style="color: var(--text-dim);">→</span>
+          <span class="mono" style="color: var(--accent);">{{ c.corrected|tojson }}</span>
+          <div class="text-xs mt-0.5" style="color: var(--text-mute);">{{ c.reason }}</div>
         </div>
         {% endfor %}
       </div>
       {% endif %}
-    {% else %}
-      <p class="text-slate-500">Extraction unavailable.</p>
+    {% elif not extraction_error %}
+      <p style="color: var(--text-mute);">Extraction unavailable.</p>
     {% endif %}
   </div>
 </div>
 
-<!-- Findings -->
-<section class="card mb-8">
-  <div class="p-4 border-b"><h3 class="display text-lg">Findings ({{ findings|length }})</h3></div>
+<!-- 2. Findings -->
+<section class="panel mb-8">
+  <div class="panel-header"><h3 class="display text-base">Findings <span class="text-sm" style="color: var(--text-dim);">({{ findings|length }})</span></h3></div>
   {% if findings %}
-  <div class="divide-y">
+  <div>
     {% for f in findings %}
-    <div class="p-4 flex gap-4">
-      <div class="w-20">
-        <span class="chip chip-{{ f.severity|lower }}">{{ f.severity }}</span>
-      </div>
-      <div class="w-20 mono text-sm">{{ f.code }}</div>
+    <div class="p-4 flex gap-4" style="border-bottom: 1px solid var(--ink-2);">
+      <div class="w-20"><span class="chip chip-{{ f.severity|lower }}">{{ f.severity }}</span></div>
+      <div class="w-20 mono text-sm" title="{{ code_summaries.get(f.code, '') }}">{{ f.code }}</div>
       <div class="flex-1">
         <div class="text-sm">{{ f.message }}</div>
-        {% if f.evidence %}<div class="text-xs text-slate-500 mono mt-1">evidence: {{ f.evidence }}</div>{% endif %}
-        {% if f.field_path %}<div class="text-xs text-slate-400 mono mt-0.5">at {{ f.field_path }}</div>{% endif %}
+        {% if code_summaries.get(f.code) %}
+          <div class="text-xs mt-1" style="color: var(--text-mute);">{{ code_summaries[f.code] }}</div>
+        {% endif %}
+        {% if f.evidence %}<div class="text-xs mono mt-1" style="color: var(--text-dim);">evidence: {{ f.evidence }}</div>{% endif %}
+        {% if f.field_path %}<div class="text-xs mono mt-0.5" style="color: var(--text-dim);">at {{ f.field_path }}</div>{% endif %}
       </div>
     </div>
     {% endfor %}
   </div>
-  {% else %}
-    <p class="p-6 text-sm text-slate-500">No findings — clean invoice.</p>
-  {% endif %}
+  {% else %}<p class="p-6 text-sm" style="color: var(--text-mute);">No findings — clean invoice.</p>{% endif %}
 </section>
 
-<!-- Tool trace -->
-<section class="card mb-8">
-  <div class="p-4 border-b"><h3 class="display text-lg">Tool trace ({{ tool_calls|length }})</h3></div>
-  {% if tool_calls %}
-    <ol class="divide-y">
-      {% for t in tool_calls %}
-      <li class="p-4">
-        <div class="flex items-baseline gap-3">
-          <span class="mono text-xs text-slate-400">{{ loop.index }}</span>
-          <span class="mono text-sm" style="color:var(--accent)">{{ t.name }}</span>
-          <span class="mono text-xs text-slate-500">{{ t.arguments|tojson }}</span>
-          <span class="ml-auto text-xs text-slate-400">{{ "%.0f"|format(t.latency_ms) }} ms</span>
-        </div>
-        <details class="mt-2 text-xs">
-          <summary class="cursor-pointer text-slate-500">result</summary>
-          <pre class="mono text-xs mt-2 p-3 bg-slate-50 rounded overflow-auto" style="max-height: 240px;">{{ t.result|tojson(indent=2) }}</pre>
-        </details>
-      </li>
-      {% endfor %}
-    </ol>
-  {% else %}
-    <p class="p-6 text-sm text-slate-500">No tool calls — Adjudicator decided on findings alone.</p>
-  {% endif %}
+<!-- 3. Adjudicator rationale -->
+<section class="panel mb-4">
+  <div class="panel-header flex items-baseline gap-3">
+    <h3 class="display text-base">Adjudicator</h3>
+    {% if run.revision_occurred %}<span class="chip chip-info">revised after critic</span>
+    {% elif run.critic_challenge %}<span class="chip chip-info">held after critic</span>{% endif %}
+  </div>
+  <div class="panel-body prose">{{ run.rationale or "(no rationale recorded)" }}</div>
 </section>
 
-<!-- Rationale + critic + revision -->
-<div class="grid grid-cols-2 gap-6 mb-8">
-  <div class="card p-6">
-    <div class="flex items-baseline gap-3 mb-3">
-      <h3 class="display text-lg">Adjudicator rationale</h3>
-      {% if run.revision_occurred %}<span class="chip chip-info">revised after critic</span>
-      {% elif run.critic_challenge %}<span class="chip chip-info">held after critic</span>{% endif %}
-    </div>
-    <div class="prose text-sm">{{ run.rationale or "(no rationale recorded)" }}</div>
+<!-- 4. Critic challenge — visually distinct as the opposing argument -->
+{% if run.critic_challenge %}
+<section class="panel mb-4" style="background: rgba(245,158,11,.04); border-color: var(--amber-dim);">
+  <div class="panel-header flex items-baseline gap-3" style="border-bottom-color: var(--amber-dim);">
+    <h3 class="display text-base" style="color: var(--amber);">Critic</h3>
+    <span class="text-xs" style="color: var(--text-mute);">the opposing argument</span>
   </div>
-  <div class="card p-6" style="background: #fefce8;">
-    <h3 class="display text-lg mb-3" style="color:var(--amber)">Critic challenge</h3>
-    {% if run.critic_challenge %}
-      <div class="prose text-sm text-slate-700">{{ run.critic_challenge }}</div>
-      <div class="text-xs text-slate-500 mt-4">
-        Held-position is a legitimate outcome. The Adjudicator {{ "revised" if run.revision_occurred else "considered and held" }} its decision after this challenge.
-      </div>
-    {% else %}
-      <p class="text-sm text-slate-500">No critic challenge fired for this invoice.</p>
-    {% endif %}
+  <div class="panel-body prose">{{ run.critic_challenge }}</div>
+  <div class="panel-body pt-0 text-xs" style="color: var(--text-mute);">
+    Held-position is a legitimate outcome. The Adjudicator {{ "revised" if run.revision_occurred else "considered and held" }} after this challenge.
   </div>
-</div>
+</section>
+{% endif %}
 
-<!-- Scribe note + settlement -->
-<div class="grid grid-cols-2 gap-6 mb-8">
-  <div class="card p-6">
-    <h3 class="display text-lg mb-3">Scribe note</h3>
-    <div class="prose text-sm" style="max-width: 60ch;">{{ run.scribe_note or "(none)" }}</div>
-    <div class="text-xs text-slate-400 mt-3">Handoff to the clerk. Georgia-serif because a human reads this.</div>
+<!-- 5. Scribe -->
+<section class="panel mb-4">
+  <div class="panel-header"><h3 class="display text-base">Scribe note</h3></div>
+  <div class="panel-body">
+    <div class="prose" style="max-width: 60ch;">{{ run.scribe_note or "(none)" }}</div>
+    <div class="text-xs mt-3" style="color: var(--text-dim);">Handoff to the clerk. Georgia-serif because a human reads this.</div>
   </div>
-  <div class="card p-6">
-    <h3 class="display text-lg mb-3">Settlement</h3>
+</section>
+
+<!-- 6. Settlement -->
+<section class="panel mb-8">
+  <div class="panel-header"><h3 class="display text-base">Settlement</h3></div>
+  <div class="panel-body">
     {% if settlement %}
       <div class="text-sm">
         <span class="chip chip-{{ 'approve' if settlement.settlement_type == 'PAID' else ('reject' if settlement.settlement_type == 'REJECTED' else 'escalate') }}">{{ settlement.settlement_type }}</span>
         {% if settlement.amount_usd %}<span class="mono ml-2">${{ "%.2f"|format(settlement.amount_usd) }}</span>{% endif %}
       </div>
-      {% if settlement.mock_payment_ref %}
-        <div class="mono text-xs mt-2 text-slate-500">ref: {{ settlement.mock_payment_ref }}</div>
-      {% endif %}
-      {% if settlement.reason %}
-        <div class="text-xs mt-2 text-slate-600">{{ settlement.reason }}</div>
-      {% endif %}
-    {% else %}
-      <p class="text-sm text-slate-500">Not settled — awaiting human decision.</p>
-    {% endif %}
+      {% if settlement.mock_payment_ref %}<div class="mono text-xs mt-2" style="color: var(--text-dim);">ref: {{ settlement.mock_payment_ref }}</div>{% endif %}
+      {% if settlement.reason %}<div class="text-xs mt-2" style="color: var(--text-mute);">{{ settlement.reason }}</div>{% endif %}
+    {% else %}<p class="text-sm" style="color: var(--text-mute);">Not settled — awaiting human decision.</p>{% endif %}
   </div>
-</div>
+</section>
 
-<!-- Cost by node -->
-<section class="card mb-8">
-  <div class="p-4 border-b"><h3 class="display text-lg">Cost by node</h3></div>
-  <table class="w-full text-sm">
-    <thead class="text-xs text-slate-500 uppercase">
-      <tr class="border-b">
-        <th class="text-left px-6 py-3">Node</th>
-        <th class="text-right px-6 py-3">Calls</th>
-        <th class="text-right px-6 py-3">Cost</th>
-        <th class="text-right px-6 py-3">Prompt</th>
-        <th class="text-right px-6 py-3">Cached</th>
-        <th class="text-right px-6 py-3">Completion</th>
-        <th class="text-right px-6 py-3">Reasoning</th>
-      </tr>
-    </thead>
+<!-- Decision history + amendment (B7) -->
+<section class="panel mb-8">
+  <div class="panel-header flex items-baseline gap-3">
+    <h3 class="display text-base">Decision history</h3>
+    <span class="text-xs" style="color: var(--text-mute);">append-only audit trail</span>
+  </div>
+  <div class="panel-body">
+    <ol class="space-y-3">
+      {% for h in history %}
+      <li class="flex gap-3">
+        <div class="w-6 mono text-xs" style="color: var(--text-dim);">{{ loop.index }}</div>
+        <div class="w-24"><span class="chip chip-{{ 'info' if h.actor=='model' else ('amended' if h.actor=='amendment' else h.outcome|lower) }}">{{ h.actor }}</span></div>
+        <div class="w-24"><span class="chip chip-{{ h.outcome|lower }}">{{ h.outcome }}</span></div>
+        <div class="flex-1 text-sm">
+          <div class="prose text-sm" style="color: var(--text-mute);">{{ h.note or "" }}</div>
+          {% if h.at %}<div class="text-xs mono mt-1" style="color: var(--text-dim);">{{ h.at }}</div>{% endif %}
+          {% if h.extra and h.extra.payment_reversal_required %}
+            <div class="mt-2 p-3 rounded text-xs" style="background: rgba(239,68,68,.10); border: 1px solid var(--red-dim); color: var(--red);">
+              <strong>PAYMENT REVERSAL REQUIRED.</strong> The prior APPROVE fired settlement <span class="mono">{{ h.extra.mock_payment_ref }}</span>. The system cannot un-call a payment; operationally, initiate a claw-back with the vendor and record the reversed amount against the settlement ledger.
+            </div>
+          {% endif %}
+        </div>
+      </li>
+      {% endfor %}
+    </ol>
+    <div class="mt-6 pt-4 rule">
+      <details>
+        <summary class="cursor-pointer text-sm" style="color: var(--text-mute);">Amend the current decision</summary>
+        <form method="post" action="/invoice/{{ run.invoice_number }}/amend" class="mt-4 flex flex-col gap-3">
+          <div class="text-xs" style="color: var(--text-mute);">
+            Amendments are appended. The original decisions above stay visible. If the currently-effective outcome is APPROVE and settlement fired, an amendment will surface a payment-reversal-required flag — the system cannot un-call a payment.
+          </div>
+          <div class="flex items-center gap-3">
+            <label class="text-xs uppercase tracking-wider" style="color: var(--text-dim);">new outcome</label>
+            <select name="new_outcome" required>
+              <option value="APPROVE">APPROVE</option>
+              <option value="REJECT">REJECT</option>
+              <option value="HOLD">HOLD</option>
+            </select>
+          </div>
+          <textarea name="reason" required rows="3" placeholder="Reason — required. Amendments without a reason don't ship." class="w-full"></textarea>
+          <div><button class="btn btn-danger" type="submit">append amendment</button></div>
+        </form>
+      </details>
+    </div>
+  </div>
+</section>
+
+<!-- 7. Tool trace (moved to bottom) -->
+<section class="panel mb-4">
+  <div class="panel-header"><h3 class="display text-base">Tool trace <span class="text-sm" style="color: var(--text-dim);">({{ tool_calls|length }})</span></h3></div>
+  {% if tool_calls %}
+  <ol>
+    {% for t in tool_calls %}
+    <li class="p-4" style="border-bottom: 1px solid var(--ink-2);">
+      <div class="flex items-baseline gap-3">
+        <span class="mono text-xs" style="color: var(--text-dim);">{{ loop.index }}</span>
+        <span class="mono text-sm" style="color: var(--accent);">{{ t.name }}</span>
+        <span class="mono text-xs" style="color: var(--text-dim);">{{ t.arguments|tojson }}</span>
+        <span class="ml-auto text-xs" style="color: var(--text-dim);">{{ "%.0f"|format(t.latency_ms) }} ms</span>
+      </div>
+      <details class="mt-2">
+        <summary class="cursor-pointer text-xs" style="color: var(--text-dim);">result</summary>
+        <pre class="mono text-xs mt-2 p-3 rounded overflow-auto" style="max-height: 240px; background: var(--ink-0); border: 1px solid var(--ink-3);">{{ t.result|tojson(indent=2) }}</pre>
+      </details>
+    </li>
+    {% endfor %}
+  </ol>
+  {% else %}<p class="p-6 text-sm" style="color: var(--text-mute);">No tool calls.</p>{% endif %}
+</section>
+
+<!-- 8. Cost by node -->
+<section class="panel mb-4">
+  <div class="panel-header"><h3 class="display text-base">Cost by node</h3></div>
+  <table class="data">
+    <thead><tr>
+      <th>Node</th><th class="text-right">Calls</th><th class="text-right">Cost</th>
+      <th class="text-right">Prompt</th><th class="text-right">Cached</th>
+      <th class="text-right">Compl</th><th class="text-right">Reason</th>
+    </tr></thead>
     <tbody>
       {% for c in cost_by_node %}
-      <tr class="border-b">
-        <td class="px-6 py-3 mono">{{ c.node }}</td>
-        <td class="px-6 py-3 text-right mono">{{ c.n }}</td>
-        <td class="px-6 py-3 text-right mono">${{ "%.5f"|format(c.cost) }}</td>
-        <td class="px-6 py-3 text-right mono">{{ "{:,}".format(c.prompt) }}</td>
-        <td class="px-6 py-3 text-right mono text-slate-500">{{ "{:,}".format(c.cached) }}</td>
-        <td class="px-6 py-3 text-right mono">{{ "{:,}".format(c.completion) }}</td>
-        <td class="px-6 py-3 text-right mono">{{ "{:,}".format(c.reasoning) }}</td>
+      <tr>
+        <td class="mono">{{ c.node }}</td>
+        <td class="text-right mono">{{ c.n }}</td>
+        <td class="text-right mono">{% if c.cost < 0.005 %}${{ "%.3f"|format(c.cost) }}{% else %}${{ "%.2f"|format(c.cost) }}{% endif %}</td>
+        <td class="text-right mono">{{ "{:,}".format(c.prompt) }}</td>
+        <td class="text-right mono" style="color: var(--text-dim);">{{ "{:,}".format(c.cached) }}</td>
+        <td class="text-right mono">{{ "{:,}".format(c.completion) }}</td>
+        <td class="text-right mono">{{ "{:,}".format(c.reasoning) }}</td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
 </section>
 
-<div class="text-xs text-slate-400">
+<div class="text-xs mt-4" style="color: var(--text-dim);">
   Nodes fired: {{ run.nodes_fired|join(" → ") }}
 </div>
 
