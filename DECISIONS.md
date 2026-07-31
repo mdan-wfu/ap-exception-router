@@ -766,3 +766,31 @@ Case (a) — not (b): no post-run correction. Prior wording in `docs/eval-result
 2026-07-31
 
 ---
+
+**Decision (effective-outcome resolved at the query layer):** The A1 bug — amending an APPROVE to HOLD did not surface in the Held view — was because view filters keyed off `runs.human_outcome` (which the amendment didn't touch). Fixed by resolving `effective_outcome = latest amendment → human_outcome → model outcome` inside `list_runs()`, plus derived membership flags (`is_awaiting`, `is_held`, `is_resolved`, `is_straight_through`). Every view / filter / count / tab-membership check now routes through those fields. `human_queue()`, `held_queue()`, `resolved_queue()`, `corpus_summary()` all rewritten to consult effective outcome; the queue-table sort key uses effective too.
+**Alternatives considered:** (a) recompute effective_outcome inside each view — same bug in three places waiting to happen; (b) materialize a view/CTE — one-way SQL when the amendments table is add-only anyway.
+**Why:** The bug wasn't that any single view had wrong logic; it was that "current authoritative outcome" was an implicit calculation and each view rederived it (or didn't). Making it explicit in the query layer means adding a new view later can't get the derivation wrong. Six new tests (`tests/test_effective_outcome.py`) lock the behavior across the queue, held, resolved, and hero-metric surfaces.
+2026-07-31
+
+**Decision (demo-fixture chip: banner, not per-row):** Under `HUMAN_GATE_MODE=demo` every escalation gets auto-resolved from a fixture, which meant the `auto · demo fixture` chip landed on the majority of rows — accurate but per-row noise. Replaced with a single dismissible banner at the top of every page (rendered by `base.html` context-processor `_demo_mode_ctx`), and a `mixed` per-row column only where the same table contains both fixture AND real clerk decisions.
+**Why:** Signal-per-row when every row carries the same signal isn't distinguishing anything. The banner communicates "everything below is fixture-driven" once and clearly; per-row chips reappear at the moment a real human decision creates actual mix.
+2026-07-31
+
+**Decision (guided UX as the design principle):** The dashboard is now consumed by AP clerks with no technical background. Every screen gets a plain-language subtitle explaining what the reader is looking at and what they can do. Human Review restructured as a four-step guided decision (what you're deciding → what the system found → what it recommends → what you can do, with per-button consequences). Add Invoice restructured as a numbered four-step page. Finding codes always render with plain-English one-liners inline (from `FINDING_SUMMARIES`) and link out to `/codes`. Empty states carry teaching copy ("what this view is for") not blank tables.
+**Why:** The explicit evaluation criterion is "users understand and enjoy using this system." That outranks visual preference; a clerk who has never seen the tool should read one screen and know what to do without documentation.
+2026-07-31
+
+**Decision (light-primary theme, dark for emphasis):** Reverted from the all-dark pass to a light neutral page background (slate-50) with dark slate-900 reserved for the top nav, hero metric panels, and section headers. Blue-700 for interactive elements, amber for warnings, red for genuinely destructive / high-stakes states. Playfair remains for hero numerals and section titles; Georgia for prose; system sans for chrome — per CLAUDE.md §3b (unchanged). Legacy `.panel` / `.panel-header` / `.panel-body` classes retained as aliases of `.card` variants so the detail page and duplicate page render under the new theme without a bulk find-replace.
+**Why:** Two rounds of aesthetic tuning converged on: dark surfaces read as emphasis when scarce, and as a wall when they're the default canvas. Light with dark accents matches how internal financial tools look (Bloomberg panel, not startup landing page) and stays legible for the AP-clerk audience.
+2026-07-31
+
+**Decision (Adjudicator ⟷ Critic side by side):** Reverted the stacked layout to a two-column pair (Adjudicator left, Critic right, visually parallel), followed by a full-width resolution strip that states in one sentence whether the Adjudicator revised or held, with the one-line note that holding is a legitimate outcome. When no critic fired, the right column shows a dashed placeholder card explaining why (only fires on amount > threshold or finding ≥ HIGH — simpler cases skip it), so the layout doesn't look like a missing panel.
+2026-07-31
+
+**Decision (queue table trimmed to work-list columns):** Dropped model-call count and per-invoice API cost from the queue table. Kept invoice / vendor / total / outcome / findings / corpus. Cost + call count remain on the detail page (Cost by node section) where they're relevant to auditing the run rather than triaging the queue.
+2026-07-31
+
+**Decision (Human Review — amount at stake is dominant):** Each review item now renders the payable amount in Playfair 42px inside a right-column box, separated from the vendor/invoice column by a rule. A reviewer's scrutiny should scale with the number in front of them, and rendering `$15,225` at the same weight as everything else made it easy to overlook.
+2026-07-31
+
+---
