@@ -670,3 +670,24 @@ The DP-002 finding says the two files exist. `get_prior_invoice` says no prior p
 2026-07-31
 
 ---
+
+**Decision (Phase 10 adversarial set design):** Four invoices in `data/adversarial/` targeting AR-001, AR-003, PR-002, and PO-002-as-pair. Kept in a separate directory from the provided corpus and a separate `eval/ground_truth_adversarial.yaml` so provided-corpus and authored numbers are never conflated in reporting. `make demo` remains the 16-invoice provided corpus; `make demo-adversarial` and `make eval-adversarial` are the authored-set entrypoints. main.py gained a `--corpus DIR` argument to make the batch reusable across both sets.
+**Alternatives considered:** (a) mix the adversarial invoices into `data/invoices/` — would inflate the provided-corpus numbers and let the authored cases hide their misses; (b) generate adversarial PDFs via a `generate_test_pdfs.py` fork per the Phase 4 plan — stayed cut, adds rendering variance without exercising anything the txt/csv/json adapters can't already reach for the target codes; (c) score adversarial and provided together — same conflation problem as (a).
+**Why:** Authored corpus should never boost or dilute the numbers the reviewer reads about the provided corpus. Ground truth was written BEFORE running the invoices — git log confirms `ground_truth_adversarial.yaml` was committed with the source files, before any live run. Live re-record cost the adversarial batch: **$0.09781** (within the $0.50 rail).
+2026-07-31
+
+---
+
+**Decision (Phase 10 discovery — AR-003 is dead code):** The adversarial exercise proved that AR-003 (stated tax ≠ subtotal × stated rate) is documented in `docs/exception-taxonomy.md` but has no implementation in `src/validators/arithmetic.py`. The arithmetic module's docstring already noted "we do not have tax_rate on the schema; we approximate by checking tax as a component of the grand-total sum, not as an independent check" — the adversarial invoice INV-2002 (subtotal 3500, tax_rate 0.08, tax_amount 210 not 280) makes this observable rather than merely documented. Ground truth for INV-2002 lists AR-003 as `may_fire`, not `must_fire`, so the eval accurately reports the current implementation.
+**Alternatives considered:** (a) implement AR-003 in this phase — requires a `tax_rate` field on the Invoice schema, all adapters updated to parse it, then a validator addition. Schema change would ripple into `_invoice_summary`, invalidating cassettes. Deferred. (b) delete the AR-003 row from the taxonomy — would invalidate cassettes via the `get_policy` extraction-surface hash (`test_taxonomy_frozen`). Deferred.
+**Why:** The adversarial exercise's point is discovery. Removing a "gap the corpus never exercised" annotation only to replace it with "dead code" is more informative than shipping the annotation. Recorded here; the fix is future work in a phase that can afford to re-record.
+2026-07-31
+
+---
+
+**Decision (Phase 10 threshold-structuring result):** ADV-2001 and ADV-2004 are a designed pair — same vendor (Widgets Inc.), 3 days apart, each $9,712.50 (in the 5% near-threshold band), jointly $19,425. Each invoice individually trips PO-002; the joint pattern goes unflagged. This is the documented honest result — the cross-invoice aggregator was cut in Phase 7 planning and remains cut. The adversarial exercise documents the gap by observation rather than by speculation.
+**Alternatives considered:** Build a cross-invoice detector for this build — significant new code, changes graph structure, cassette re-record cost across the corpus.
+**Why:** The Phase 10 spec ("state the honest result") applies. A build that reports "pair pattern individually flagged but not cross-aggregated, here is the concrete case that proves it" beats a build that either omits the case or fabricates aggregation.
+2026-07-31
+
+---

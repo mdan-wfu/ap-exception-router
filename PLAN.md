@@ -172,8 +172,8 @@ Each is pure: `(Invoice, reference) -> list[Finding]`.
 **Exit:** you can state "X% field accuracy, Y% decision accuracy, $Z per invoice" and defend each number.
 
 ## Phase 10 — Above and beyond
-- [ ] 3–4 adversarial invoices of your own, each targeting a gap the provided corpus misses. **Generate them with a fork of their script** (`scripts/generate_test_pdfs.py`, leaving `generate_pdfs.py` untouched) so they carry identical rendering quirks and extraction difficulty
-- [ ] Cross-invoice threshold-structuring detection (INV-1008 and INV-1012 both sitting just under $10K)
+- [x] 4 adversarial invoices in `data/adversarial/`, each targeting a gap the provided corpus misses (AR-001, AR-003, PR-002, PO-002-pair). Formats limited to txt/csv/json — no PDF-generator fork (stayed cut per Phase 10 scope decision; the proven adapters cover the target codes without introducing new rendering variance).
+- [~] Cross-invoice threshold-structuring detection — **not implemented.** The adversarial pair ADV-2001/ADV-2004 (same vendor, 3 days apart, each sub-threshold, $19,425 jointly) fires PO-002 on each invoice individually but no aggregator recognizes the pair. Documented in eval-results as a known gap; a cross-invoice detector is Phase 11+ work.
 - [ ] *Optional, first to cut:* run the finished eval suite against Claude for comparison. State the bias plainly — prompts were developed against Grok and Claude is being measured on Grok-tuned prompts
 
 **Exit:** **Sync with planning chat before Day 3.**

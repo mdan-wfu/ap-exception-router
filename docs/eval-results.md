@@ -106,3 +106,41 @@ We do not claim to eliminate the $2M loss. A defensible framing: the architectur
 ## Reproducibility
 
 `make eval` runs the full harness from a clean checkout. The manifest above pins the exact configuration; each rerun writes a `runs/eval-<ts>.json` alongside the terminal output. Two consecutive `make demo` runs produce byte-identical output at md5 `d31895b6b7320e729324b4e56d93a4f8` (Phase 7 determinism check, updated to reflect the INV-1011 re-record).
+
+---
+
+## Authored adversarial set (Phase 10)
+
+Four hand-authored invoices in `data/adversarial/`, kept in a **separate corpus, separate ground truth, separate eval target**. Never blended into the provided-corpus numbers above. Target: the three finding codes the Phase 7 audit flagged as "not exercised by corpus" (AR-001, AR-003, PR-002), plus a threshold-structuring pair.
+
+Run: `make eval-adversarial`.
+
+### Headline
+
+| Layer | Result | Denominator |
+|---|---|---|
+| **Extraction accuracy** | 32 / 32 = **100%** | field-level checks |
+| **Must-fire findings** | 4 / 4 = **100%** | codes ground truth requires |
+| **Decision agreement** | 4 / 4 = **100%** | outcome ∈ expected set |
+
+Live spend to record: **$0.09781** for the four-invoice batch (budget was $0.50). Extractor cassettes and agent-loop cassettes committed to `data/cassettes/`; the provided corpus's cassettes untouched.
+
+### Per invoice
+
+| Invoice | Target | Fired | Outcome | Expected | Notes |
+|---|---|---|---|---|---|
+| INV-2001 (txt, Widgets Inc.) | AR-001 | AR-001 + PO-002 fired | ESCALATE | ESCALATE | Line 1 states $2,250 for 8 × $250 (expected $2,000); total lands in the 5% near-threshold band → PO-002 co-fires. |
+| INV-2002 (json, Precision Parts) | AR-003 | (none fired) | APPROVE | APPROVE | **AR-003 is documented in the taxonomy but not implemented** in `src/validators/arithmetic.py` — the module docstring calls this out explicitly ("we do not have tax_rate on the schema"). Authoring an invoice targeting AR-003 was the only way to prove the gap by observation. Ground truth reflects the current implementation, not the taxonomy. |
+| INV-2003 (csv, Acme Industrial) | PR-002 | PR-002 fired (LOW) | APPROVE | APPROVE | WidgetA at $180 is 28% below the $250 reference (tolerance ±5%). Single LOW-severity finding — Adjudicator correctly does not escalate on a favorable-looking discount alone. |
+| INV-2004 (txt, Widgets Inc.) | PO-002 + pair with 2001 | PO-002 fired | ESCALATE | APPROVE / ESCALATE | Individually clean, sits in the 5% near-threshold band. **Threshold-structuring result:** the invoice fires PO-002 on its own, and INV-2001 fires PO-002 on its own, but there is **no cross-invoice aggregator** that recognizes "two invoices from the same vendor, three days apart, each sub-threshold" as a joint signal. The current pipeline processes invoices independently; pair detection was on the Phase 7 cut list and remains cut. Honest result: the individual flags fire, the joint pattern goes undetected. |
+
+### What the adversarial exercise surfaced
+
+- **AR-003 is dead code.** Documented in `docs/exception-taxonomy.md`, has no implementation in the arithmetic validator, and no corpus (provided or authored) can make it fire. The taxonomy's "not exercised by corpus" annotation is polite; the truer statement is "not implemented." Recorded in DECISIONS.
+- **PR-002 works and is calibrated correctly at LOW.** A −28% discount on an otherwise-clean single-line invoice correctly routes to APPROVE — the model doesn't over-trust the favorable-looking anomaly nor over-react to a single LOW-severity finding. Encouraging.
+- **AR-001 works and routes sensibly.** A single arithmetic defect on an otherwise-plausible invoice trips MEDIUM, which combined with the near-threshold co-firing of PO-002 lands ESCALATE — the expected treatment.
+- **Threshold structuring is per-invoice-only.** The eval documents the gap; a cross-invoice detector is a Phase 11+ feature, not a defect of the current build.
+
+### Taxonomy annotations
+
+The Phase 7 "not exercised by corpus" annotations on AR-001, AR-003, and PR-002 remain in `docs/exception-taxonomy.md`. That column is inside the `get_policy` extraction surface guarded by `tests/test_taxonomy_frozen.py` — updating it would change tool-visible content and invalidate recorded provided-corpus cassettes. The "exercised by authored adversarial set" note lives here in `eval-results.md` instead, which is not tool-visible.
