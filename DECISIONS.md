@@ -714,3 +714,23 @@ Case (a) — not (b): no post-run correction. Prior wording in `docs/eval-result
 2026-07-31
 
 ---
+
+**Decision (dashboard-forced-replay):** `src/ui/app.py` now sets `os.environ["LLM_MODE"] = "replay"` unconditionally at import time (was `setdefault`). Test `test_importing_ui_app_forces_llm_mode_replay` locks the invariant.
+**Alternatives considered:** (a) keep `setdefault` and document the invariant — invisible failure mode; (b) construct the LLMProvider with `mode="replay"` explicitly at every re-extraction site — more surgery, easy to miss a call site later.
+**Why:** A reviewer who has just run `--live` on her own invoice with `LLM_MODE=live` still exported in her shell would open the dashboard and have page renders make real API calls against her account. The dashboard is a READ surface; incurring cost from a page load is a class of surprise it must not produce, regardless of ambient config.
+2026-07-31
+
+**Decision (dashboard graceful degradation on re-extraction failure):** Both re-extraction call sites (`src/ui/app.py:invoice_detail` and `src/ui/data.py:get_duplicate_pair`) now guard the call. `re_extract` returns `(extraction, error_message)`. Detail view renders an amber "line-item detail unavailable" banner plus the full audit-store record (findings, rationale, tool trace, cost). Duplicate view degrades per row: a missing sibling shows a placeholder card, the other side still renders normally. Two tests in `tests/test_dashboard_degradation.py` lock the behavior: detail view 200 on missing `source_file`; queue view 200 with one orphan row plus 19 real rows all still visible.
+**Alternatives considered:** (a) 404 on missing source file — hides the run; (b) render "Extraction unavailable" without explaining why — leaves the reviewer guessing between a missing file and an actual defect.
+**Why:** The likely trigger is a reviewer processing an invoice from `/tmp/…` and later cloning the repo elsewhere — the audit-store row's absolute-path `source_file` no longer resolves. That is honest use, not an error; the page must render.
+2026-07-31
+
+**Decision (reviewer-friendly cache-miss message):** `CacheMissError` now surfaces plain-language guidance instead of "no cassette for key <hex>. Run with --live". Message names the two committed sets (16 provided + 4 adversarial), gives the exact two-step re-run recipe (put key in `.env`, add `--live`), sets cost expectation ($0.01–0.10 per invoice with the circuit breaker citation), and demotes the SHA-256 to a debug-only footer. `main.py` catches `CacheMissError` and prints the message without a Python traceback (exit 2).
+**Why:** In `LLM_MODE=replay`, a novel invoice MUST miss the cache — that is correct behavior. A raw hash + traceback tells the reviewer nothing about what to do next. Task 3 verified this on `/tmp/reviewer_test/novel_invoice.txt`: the message renders inline in the CLI, no traceback, actionable.
+2026-07-31
+
+**Decision (Phase 11 patch — data.py AUDIT_DB_PATH resolved at call time):** `src/ui/data.py::_conn` now does `from src import config as _cfg` inside the function and reads `_cfg.AUDIT_DB_PATH` at call time. Was a module-level `from src.config import AUDIT_DB_PATH`, which cached the load-time value and made test monkeypatching ineffective.
+**Why:** The degradation tests need per-test audit DBs (tmp_path). Load-time capture defeated `monkeypatch.setattr(src.config, "AUDIT_DB_PATH", ...)`. Same pattern as `AuditStore.__init__` (Phase 6 fix, same rationale).
+2026-07-31
+
+---
