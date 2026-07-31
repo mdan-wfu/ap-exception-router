@@ -2,24 +2,23 @@
 
 Boot with `make dashboard` → http://127.0.0.1:8000
 
-Never calls the LLM. Never mutates cassettes. Re-extraction of invoice
-sources runs in the same LLM_MODE=replay path the demo uses; deterministic
-adapters return instantly and LLM adapters hit committed cassettes.
+Never calls the LLM at page render. Re-extraction of invoice sources runs
+in `LLM_MODE=replay`; deterministic adapters return instantly and LLM
+adapters hit committed cassettes. The single explicit exception is the
+`/upload/{name}/run` POST — it requires an affirmative click, a
+configured XAI_API_KEY, and switches temporarily to `--live` for exactly
+one invoice. See DECISIONS 2026-07-31 dashboard-forced-replay for why.
 """
 from __future__ import annotations
 
 import os
 from pathlib import Path
 
-from fastapi import FastAPI, Form, Request
+from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-# Force replay mode unconditionally. `setdefault` would inherit an ambient
-# LLM_MODE=live from the reviewer's shell — page renders would then make real
-# API calls against the reviewer's key. The dashboard is a READ surface over
-# recorded runs and must never be capable of incurring cost, regardless of
-# ambient config. See DECISIONS 2026-07-31 dashboard-forced-replay.
+# Force replay unconditionally at page render. See Phase 11 hardening.
 os.environ["LLM_MODE"] = "replay"
 os.environ.setdefault("HUMAN_GATE_MODE", "demo")
 
@@ -33,20 +32,19 @@ app = FastAPI(title="AP Exception Router — Dashboard", docs_url=None, redoc_ur
 
 
 # ---------------------------------------------------------------------------
-# Landing / queue view
+# Queue view (landing)
 # ---------------------------------------------------------------------------
 
 @app.get("/", response_class=HTMLResponse)
 def queue_view(request: Request):
-    all_runs = data.list_runs()
-    provided_summary = data.corpus_summary("provided")
-    adversarial_summary = data.corpus_summary("adversarial")
     return templates.TemplateResponse(request, "queue.html", {
-        "runs": all_runs,
-        "provided": provided_summary,
-        "adversarial": adversarial_summary,
+        "active_nav": "queue",
+        "runs": data.list_runs(),
+        "provided": data.corpus_summary("provided"),
+        "adversarial": data.corpus_summary("adversarial"),
         "provided_findings": data.findings_by_prefix("provided"),
         "adversarial_findings": data.findings_by_prefix("adversarial"),
+        "code_summaries": data.FINDING_SUMMARIES,
     })
 
 
@@ -59,16 +57,10 @@ def invoice_detail(request: Request, invoice_number: str):
     run = data.get_run(invoice_number)
     if run is None:
         return HTMLResponse(f"<h1>{invoice_number} not found</h1>", status_code=404)
-    # Re-extraction degrades gracefully: on failure (missing source file,
-    # cassette miss for a re-encoded file, adapter parse error) render
-    # everything the audit store DID persist (outcome, findings, rationale,
-    # critic, tool trace, per-node cost) with a small inline note where
-    # the enrichment would be.
     ext, extraction_error = data.re_extract(run["source_file"])
-    settlement = data.get_settlement(
-        invoice_number, run["vendor_name"] or ""
-    )
+    settlement = data.get_settlement(invoice_number, run["vendor_name"] or "")
     return templates.TemplateResponse(request, "detail.html", {
+        "active_nav": "queue",
         "run": run,
         "extraction": ext,
         "extraction_error": extraction_error,
@@ -78,11 +70,30 @@ def invoice_detail(request: Request, invoice_number: str):
         "tool_calls": data.get_tool_calls(run["id"]),
         "cost_by_node": data.cost_by_node_type(run["id"]),
         "settlement": settlement,
+        "history": data.decision_history(invoice_number),
+        "effective_outcome": data.effective_outcome(invoice_number),
+        "auto_resolved": data._is_auto_resolved(run.get("human_note")),
+        "code_summaries": data.FINDING_SUMMARIES,
     })
 
 
+@app.post("/invoice/{invoice_number}/amend")
+def amend_decision(
+    invoice_number: str,
+    new_outcome: str = Form(...),
+    reason: str = Form(...),
+):
+    if new_outcome not in {"APPROVE", "REJECT", "HOLD"}:
+        return RedirectResponse(url=f"/invoice/{invoice_number}", status_code=303)
+    if not reason.strip():
+        return RedirectResponse(url=f"/invoice/{invoice_number}?err=reason_required",
+                                status_code=303)
+    data.record_amendment(invoice_number, new_outcome, reason.strip())
+    return RedirectResponse(url=f"/invoice/{invoice_number}", status_code=303)
+
+
 # ---------------------------------------------------------------------------
-# Duplicate diff (INV-1004 flagship)
+# Duplicate diff (INV-1004)
 # ---------------------------------------------------------------------------
 
 @app.get("/duplicate/{invoice_number}", response_class=HTMLResponse)
@@ -97,6 +108,7 @@ def duplicate_view(request: Request, invoice_number: str):
     findings = data.get_findings(run["id"]) if run else []
     dp_findings = [f for f in findings if f["code"].startswith("DP-")]
     return templates.TemplateResponse(request, "duplicate.html", {
+        "active_nav": "queue",
         "invoice_number": invoice_number,
         "entries": entries,
         "run": run,
@@ -105,17 +117,23 @@ def duplicate_view(request: Request, invoice_number: str):
 
 
 # ---------------------------------------------------------------------------
-# Human escalation queue
+# Human review tabs — awaiting, held, resolved
 # ---------------------------------------------------------------------------
 
 @app.get("/queue", response_class=HTMLResponse)
 def human_queue_view(request: Request):
     return templates.TemplateResponse(request, "human_queue.html", {
-        "queue": data.human_queue(),
-        "resolved": [
-            r for r in data.list_runs()
-            if r["outcome"] == "ESCALATE" and r.get("human_outcome")
-        ],
+        "active_nav": "review",
+        "awaiting": data.human_queue(),
+        "resolved": data.resolved_queue(),
+    })
+
+
+@app.get("/held", response_class=HTMLResponse)
+def held_view(request: Request):
+    return templates.TemplateResponse(request, "held.html", {
+        "active_nav": "held",
+        "held": data.held_queue(),
     })
 
 
@@ -124,4 +142,124 @@ def resolve(invoice_number: str, action: str = Form(...), note: str = Form("")):
     if action not in {"APPROVE", "REJECT", "HOLD"}:
         return RedirectResponse(url="/queue", status_code=303)
     data.record_human_decision(invoice_number, action, note)
-    return RedirectResponse(url="/queue", status_code=303)
+    # HOLDs go to the Held tab; APPROVE/REJECT to the resolved section of /queue.
+    return RedirectResponse(
+        url="/held" if action == "HOLD" else "/queue",
+        status_code=303,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Code legend (B4)
+# ---------------------------------------------------------------------------
+
+@app.get("/codes", response_class=HTMLResponse)
+def codes_view(request: Request):
+    return templates.TemplateResponse(request, "codes.html", {
+        "active_nav": "codes",
+        "codes": data.finding_code_legend(),
+        "summaries": data.FINDING_SUMMARIES,
+    })
+
+
+# ---------------------------------------------------------------------------
+# Upload (B8) — the ONE dashboard path that can authorize a live call
+# ---------------------------------------------------------------------------
+
+@app.get("/upload", response_class=HTMLResponse)
+def upload_form(request: Request):
+    return templates.TemplateResponse(request, "upload.html", {
+        "active_nav": "upload",
+        "key_configured": data.xai_key_configured(),
+        "recent_uploads": _list_uploads(),
+    })
+
+
+@app.post("/upload")
+async def upload_receive(
+    request: Request,
+    file: UploadFile | None = File(None),
+    pasted: str = Form(""),
+    pasted_name: str = Form("pasted_invoice.txt"),
+):
+    if file is not None and file.filename:
+        contents = await file.read()
+        dest = data.save_upload(file.filename, contents)
+    elif pasted.strip():
+        dest = data.save_upload(pasted_name, pasted.encode("utf-8"))
+    else:
+        return RedirectResponse(url="/upload?err=nofile", status_code=303)
+    return RedirectResponse(url=f"/upload/{dest.name}", status_code=303)
+
+
+@app.get("/upload/{name}", response_class=HTMLResponse)
+def upload_detail(request: Request, name: str):
+    path = data.uploads_dir() / name
+    if not path.exists():
+        return HTMLResponse(f"<h1>upload {name!r} not found</h1>", status_code=404)
+    return templates.TemplateResponse(request, "upload_detail.html", {
+        "active_nav": "upload",
+        "filename": name,
+        "path": str(path),
+        "size": path.stat().st_size,
+        "preview": _preview_bytes(path),
+        "key_configured": data.xai_key_configured(),
+    })
+
+
+@app.post("/upload/{name}/run")
+def upload_run(name: str, confirm: str = Form("")):
+    """The ONLY dashboard path that can incur cost. Gated on both an
+    affirmative `confirm=yes` from the button and a configured
+    XAI_API_KEY. Runs exactly ONE invoice, live."""
+    path = data.uploads_dir() / name
+    if not path.exists():
+        return HTMLResponse(f"<h1>upload {name!r} not found</h1>", status_code=404)
+    if confirm != "yes":
+        return RedirectResponse(url=f"/upload/{name}?err=notconfirmed", status_code=303)
+    if not data.xai_key_configured():
+        return RedirectResponse(url=f"/upload/{name}?err=nokey", status_code=303)
+
+    # Temporarily switch to auto for this one call — records the cassette if
+    # miss. Restore after.
+    saved = os.environ.get("LLM_MODE", "replay")
+    os.environ["LLM_MODE"] = "auto"
+    try:
+        from src.graph import run_one
+        run_one(str(path))
+    except Exception as exc:
+        return HTMLResponse(
+            f"<h1>run failed</h1><pre>{type(exc).__name__}: {exc}</pre>",
+            status_code=500,
+        )
+    finally:
+        os.environ["LLM_MODE"] = saved
+
+    # Redirect to the invoice detail — the audit store now has a row.
+    # We need the invoice number; grab it via the extraction.
+    ext, _ = data.re_extract(str(path))
+    if ext is not None:
+        return RedirectResponse(url=f"/invoice/{ext.invoice.invoice_number}",
+                                status_code=303)
+    return RedirectResponse(url="/", status_code=303)
+
+
+def _list_uploads() -> list[dict]:
+    d = data.uploads_dir()
+    return sorted(
+        [{"name": p.name, "size": p.stat().st_size} for p in d.iterdir() if p.is_file()],
+        key=lambda x: x["name"],
+    )
+
+
+def _preview_bytes(path: Path, limit: int = 4000) -> str:
+    try:
+        if path.suffix.lower() == ".pdf":
+            import pdfplumber
+            with pdfplumber.open(str(path)) as pdf:
+                txt = "\n".join(p.extract_text() or "" for p in pdf.pages)
+        else:
+            txt = path.read_text(errors="replace")
+    except Exception as exc:
+        return f"(cannot preview: {type(exc).__name__}: {exc})"
+    return txt[:limit] + ("\n… (truncated)" if len(txt) > limit else "")

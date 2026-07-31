@@ -60,16 +60,31 @@ def list_runs() -> list[dict[str, Any]]:
             FROM runs r
             ORDER BY r.invoice_number
         """).fetchall()
+    # Pull human_note as well so we can flag demo-fixture auto-resolutions
+    with _conn() as c:
+        notes = {
+            r["invoice_number"]: r["human_note"]
+            for r in c.execute("SELECT invoice_number, human_note FROM runs").fetchall()
+        }
     result = []
     for r in rows:
         d = dict(r)
         d["corpus"] = corpus_of(d["source_file"])
         d["is_duplicate_pair"] = d["invoice_number"] == "INV-1004"
+        d["human_note"] = notes.get(d["invoice_number"])
+        d["auto_resolved"] = _is_auto_resolved(d["human_note"])
         result.append(d)
     # escalations first, then rejects, then approves — the manager's ordering
     order = {"ESCALATE": 0, "REJECT": 1, "APPROVE": 2, "FAILED": 3}
     result.sort(key=lambda x: (order.get(x["outcome"], 9), x["invoice_number"]))
     return result
+
+
+def _is_auto_resolved(note: str | None) -> bool:
+    """Demo-mode fixture resolutions carry a note starting with 'demo fixture'.
+    A dashboard reviewer must never mistake one of these for a real human
+    decision — see B5 of the Phase 11 dashboard revision."""
+    return bool(note) and note.strip().lower().startswith("demo fixture")
 
 
 def corpus_summary(corpus: str) -> dict[str, Any]:
@@ -348,8 +363,270 @@ def record_human_decision(
 
 
 def human_queue() -> list[dict[str, Any]]:
-    """Escalated runs that haven't been resolved (no human_outcome yet)."""
+    """Escalated runs awaiting a genuine human decision. Demo-fixture auto-
+    resolutions with human_outcome=None (HOLD in the fixture) surface here
+    too, tagged auto_resolved=True so the template can render them with the
+    `auto-resolved · demo fixture` chip. Actual dashboard-triggered HOLD
+    goes to the /held view, not here."""
     return [
         r for r in list_runs()
-        if r["outcome"] == "ESCALATE" and not r.get("human_outcome")
+        if r["outcome"] == "ESCALATE" and r.get("human_outcome") in (None, "")
     ]
+
+
+def held_queue() -> list[dict[str, Any]]:
+    """Actionable held items — a clerk clicked HOLD from the dashboard and
+    intends to return once she has more info. Not resolved, not awaiting —
+    a third state. Held is NEVER terminal."""
+    return [r for r in list_runs() if r.get("human_outcome") == "HOLD"]
+
+
+def resolved_queue() -> list[dict[str, Any]]:
+    """Runs where a genuine APPROVE/REJECT was recorded (from the fixture
+    OR a dashboard action). Excludes HOLD (a held item is not resolved)."""
+    return [
+        r for r in list_runs()
+        if r.get("human_outcome") in ("APPROVE", "REJECT")
+    ]
+
+
+# ---------------------------------------------------------------------------
+# Amendments — append-only decision history (B7)
+# ---------------------------------------------------------------------------
+
+def _ensure_amendments_table() -> None:
+    """Add-only schema — doesn't touch existing tables or LLM message
+    content, no cassette risk. Idempotent."""
+    with _conn() as c:
+        c.executescript("""
+            CREATE TABLE IF NOT EXISTS decision_amendments (
+                id                        INTEGER PRIMARY KEY AUTOINCREMENT,
+                invoice_number            TEXT NOT NULL,
+                timestamp                 TEXT NOT NULL,
+                new_outcome               TEXT NOT NULL,
+                reason                    TEXT NOT NULL,
+                prior_outcome             TEXT,
+                payment_reversal_required INTEGER NOT NULL DEFAULT 0,
+                mock_payment_ref          TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_amendments_invoice
+                ON decision_amendments(invoice_number);
+        """)
+        c.commit()
+
+
+def record_amendment(
+    invoice_number: str, new_outcome: str, reason: str,
+) -> dict[str, Any]:
+    """Append a new amendment. NEVER overwrites — original decisions stay in
+    runs.outcome (model) and runs.human_outcome (human); amendments layer on
+    top in this table.
+
+    If the currently-effective outcome was APPROVE and a PAID settlement
+    exists, the amendment flags `payment_reversal_required` and records the
+    mock_payment_ref that would need to be reversed operationally. The
+    system cannot un-call a payment; the flag is honest about that."""
+    from datetime import datetime, timezone
+    _ensure_amendments_table()
+
+    # What's the currently-effective outcome? Human override wins over model.
+    run = get_run(invoice_number)
+    if run is None:
+        raise ValueError(f"no run for {invoice_number}")
+    prior = run.get("human_outcome") or run["outcome"]
+
+    payment_ref = None
+    reversal = 0
+    if prior == "APPROVE":
+        settlement = get_settlement(invoice_number, run["vendor_name"] or "")
+        if settlement and settlement.get("settlement_type") == "PAID":
+            payment_ref = settlement.get("mock_payment_ref")
+            reversal = 1 if new_outcome != "APPROVE" else 0
+
+    now = datetime.now(timezone.utc).isoformat()
+    with _conn() as c:
+        c.execute("""
+            INSERT INTO decision_amendments
+              (invoice_number, timestamp, new_outcome, reason,
+               prior_outcome, payment_reversal_required, mock_payment_ref)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (invoice_number, now, new_outcome, reason,
+              prior, reversal, payment_ref))
+        c.commit()
+    return {
+        "invoice_number": invoice_number, "timestamp": now,
+        "new_outcome": new_outcome, "reason": reason,
+        "prior_outcome": prior,
+        "payment_reversal_required": bool(reversal),
+        "mock_payment_ref": payment_ref,
+    }
+
+
+def amendments_for(invoice_number: str) -> list[dict[str, Any]]:
+    _ensure_amendments_table()
+    with _conn() as c:
+        rows = c.execute("""
+            SELECT id, timestamp, new_outcome, reason, prior_outcome,
+                   payment_reversal_required, mock_payment_ref
+            FROM decision_amendments
+            WHERE invoice_number = ?
+            ORDER BY id ASC
+        """, (invoice_number,)).fetchall()
+    return [dict(r) for r in rows]
+
+
+def decision_history(invoice_number: str) -> list[dict[str, Any]]:
+    """Full decision chain for the detail view, in order:
+       model outcome → human decision (if any) → amendments (any number).
+    Each entry: {actor, outcome, at, note, extra}."""
+    run = get_run(invoice_number)
+    if run is None:
+        return []
+    chain: list[dict[str, Any]] = [{
+        "actor": "model", "outcome": run["outcome"],
+        "at": run.get("finished_at"),
+        "note": run.get("rationale"),
+        "extra": None,
+    }]
+    if run.get("human_outcome"):
+        chain.append({
+            "actor": "human", "outcome": run["human_outcome"],
+            "at": None,
+            "note": run.get("human_note"),
+            "extra": None,
+        })
+    for a in amendments_for(invoice_number):
+        chain.append({
+            "actor": "amendment",
+            "outcome": a["new_outcome"],
+            "at": a["timestamp"],
+            "note": a["reason"],
+            "extra": {
+                "prior_outcome": a["prior_outcome"],
+                "payment_reversal_required": bool(a["payment_reversal_required"]),
+                "mock_payment_ref": a["mock_payment_ref"],
+            },
+        })
+    return chain
+
+
+def effective_outcome(invoice_number: str) -> str | None:
+    """The currently-authoritative outcome after model → human → amendments."""
+    chain = decision_history(invoice_number)
+    return chain[-1]["outcome"] if chain else None
+
+
+# ---------------------------------------------------------------------------
+# Uploads (B8) — pathway for a reviewer to test her own invoice from the UI
+# ---------------------------------------------------------------------------
+
+UPLOAD_DIR = Path("data/uploads")
+
+
+def uploads_dir() -> Path:
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    return UPLOAD_DIR
+
+
+def save_upload(filename: str, contents: bytes) -> Path:
+    """Persist an uploaded invoice to data/uploads/ (gitignored). Sanitizes
+    the filename to prevent path traversal; unknown suffixes fall back to
+    .txt so the router still recognizes them."""
+    from pathlib import PurePath
+    safe = PurePath(filename).name  # strip any dir components
+    if not safe or safe.startswith("."):
+        safe = "upload.txt"
+    if PurePath(safe).suffix.lower() not in {".txt", ".pdf", ".json", ".csv", ".xml"}:
+        safe = safe + ".txt"
+    dest = uploads_dir() / safe
+    # Uniquify if the same name already exists
+    i = 1
+    while dest.exists():
+        stem = PurePath(safe).stem
+        suf = PurePath(safe).suffix
+        dest = uploads_dir() / f"{stem}_{i}{suf}"
+        i += 1
+    dest.write_bytes(contents)
+    return dest
+
+
+def xai_key_configured() -> bool:
+    """Whether an XAI_API_KEY is present that could authorize a live call.
+    Returns True only for a real key (rejects the replay-placeholder we
+    inject in provider.py when no key is set)."""
+    import os
+    key = os.environ.get("XAI_API_KEY", "")
+    if not key or key == "replay-mode-placeholder":
+        return False
+    # xAI keys start with `xai-`; anything else is not real.
+    return key.startswith("xai-")
+
+
+# ---------------------------------------------------------------------------
+# Code legend (B4) — parse the plain-English meanings from taxonomy prose
+# ---------------------------------------------------------------------------
+
+def finding_code_legend() -> list[dict[str, Any]]:
+    """Build the code legend from docs/exception-taxonomy.md. Reads the
+    same table rows the get_policy tool reads (trigger + rationale), but
+    doesn't return anything the tool doesn't; this is a READ over the
+    taxonomy doc, not a write, so it cannot invalidate cassettes.
+
+    Returns one entry per code with prefix, domain, code, trigger,
+    rationale, and a short one-line summary derived from the trigger."""
+    from src.tools.policy_tool import _parse_taxonomy
+    entries = _parse_taxonomy()
+    domains = {
+        "EX": "extraction", "AR": "arithmetic", "IN": "inventory",
+        "PR": "pricing", "VN": "vendor", "TM": "terms",
+        "DP": "duplicates", "PO": "policy", "FR": "fraud signals",
+    }
+    result = []
+    for code in sorted(entries):
+        row = entries[code]
+        result.append({
+            "code": code,
+            "prefix": code.split("-")[0],
+            "domain": domains.get(code.split("-")[0], ""),
+            "trigger": row.get("trigger", ""),
+            "rationale": row.get("rationale", ""),
+        })
+    return result
+
+
+# One-liners for the finding-chip hover tooltip. Hand-authored so they're
+# short enough to fit in a tooltip; kept in-code so a taxonomy edit doesn't
+# force a re-run of anything.
+FINDING_SUMMARIES: dict[str, str] = {
+    "EX-001": "Extractor made silent repairs (OCR / formatting).",
+    "AR-001": "A stated line amount ≠ quantity × unit_price.",
+    "AR-002": "Stated subtotal ≠ sum of line amounts.",
+    "AR-003": "Stated tax ≠ subtotal × stated rate. (Documented; not implemented.)",
+    "AR-004": "Stated total ≠ subtotal + tax + additional_charges. Signed delta.",
+    "AR-005": "A line has quantity < 0.",
+    "AR-006": "Stated total is negative.",
+    "IN-001": "Item not in inventory catalog — can't fulfill unknown SKU.",
+    "IN-002": "Item present but inactive with zero stock (discontinued).",
+    "IN-003": "Aggregated quantity of a canonical item exceeds available stock.",
+    "PR-001": "Unit price above reference by more than 5% (overcharge).",
+    "PR-002": "Unit price below reference by more than 5% (undercharge / teaser).",
+    "PR-003": "Same canonical item at multiple prices within one invoice.",
+    "PR-004": "No reference price for this item — comparison unavailable.",
+    "VN-001": "Vendor not found in the master.",
+    "VN-002": "No exact match but a fuzzy candidate or vendor_claims hit.",
+    "VN-003": "Email domain cannot be verified against the master.",
+    "VN-004": "Vendor claim references an INACTIVE master vendor (rename ambiguity).",
+    "VN-005": "Vendor name is empty.",
+    "TM-001": "Due date inconsistent with invoice_date + payment terms.",
+    "TM-002": "Stated terms differ from the vendor's contracted terms.",
+    "TM-003": "Due date unparseable or on/before invoice date.",
+    "DP-001": "Multiple files with matching semantic_hash — dedupe resolved.",
+    "DP-002": "Multiple files with same invoice_number, DIFFERENT content — double-pay risk.",
+    "DP-003": "A revision marker is present in the duplicate group.",
+    "PO-001": "Total exceeds $10,000 approval threshold — manager required.",
+    "PO-002": "Total sits within 5% below threshold — structuring signature.",
+    "PO-003": "Native currency ≠ USD; FX conversion was applied.",
+    "FR-001": "Urgency / pressure language in source text.",
+    "FR-002": "Non-standard payment channel requested (wire, gift card, bitcoin).",
+    "FR-003": "Suspicious vendor address (matches a high-profile address list).",
+}

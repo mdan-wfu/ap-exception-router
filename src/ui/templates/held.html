@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Held — AP Exception Router{% endblock %}
+{% block content %}
+
+<div class="mb-8 text-center">
+  <div class="text-xs uppercase tracking-widest" style="color: var(--text-dim);">Actionable, not resolved</div>
+  <h1 class="display display-bold text-4xl mt-2">Held</h1>
+  <p class="mt-2 max-w-2xl mx-auto text-sm" style="color: var(--text-mute);">
+    A hold means <em>"I need more information and will return."</em> Held is not a terminal state; items here remain actionable — approve or reject once you have what you need.
+  </p>
+</div>
+
+{% if held %}
+<div class="space-y-4">
+  {% for r in held %}
+  <div class="panel panel-body">
+    <div class="flex items-baseline gap-3">
+      <a class="display text-lg" href="/invoice/{{ r.invoice_number }}">{{ r.invoice_number }}</a>
+      <span class="chip chip-{{ r.corpus }}">{{ r.corpus }}</span>
+      <span class="chip chip-hold">HELD</span>
+      <span class="text-sm" style="color: var(--text-mute);">{{ r.vendor_name or "(no vendor)" }}</span>
+      <span class="mono ml-auto text-sm">${{ "%.2f"|format(r.stated_total_usd or 0) }}</span>
+    </div>
+    {% if r.human_note %}
+      <div class="text-xs mt-2" style="color: var(--text-mute);">note: {{ r.human_note }}</div>
+    {% endif %}
+    <div class="prose text-sm mt-3" style="max-width: 68ch; color: var(--text-mute);">{{ r.rationale }}</div>
+    <form method="post" action="/queue/{{ r.invoice_number }}" class="mt-4 flex flex-wrap items-center gap-2">
+      <input name="note" type="text" placeholder="update note (optional)" class="flex-1 min-w-64">
+      <button name="action" value="APPROVE" class="btn btn-approve">approve</button>
+      <button name="action" value="REJECT"  class="btn btn-reject">reject</button>
+      <button name="action" value="HOLD"    class="btn btn-hold">keep held</button>
+    </form>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="panel panel-body text-center" style="color: var(--text-mute);">
+  Nothing held. Held items appear here when a clerk clicks HOLD from the review queue.
+</div>
+{% endif %}
+{% endblock %}

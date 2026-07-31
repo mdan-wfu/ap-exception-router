@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Codes — AP Exception Router{% endblock %}
+{% block content %}
+
+<div class="mb-8 text-center">
+  <div class="text-xs uppercase tracking-widest" style="color: var(--text-dim);">Reference</div>
+  <h1 class="display display-bold text-4xl mt-2">Finding codes</h1>
+  <p class="mt-2 max-w-3xl mx-auto text-sm" style="color: var(--text-mute);">
+    Codes are stable identifiers. Prefix names the domain (<span class="mono">IN-</span> inventory, <span class="mono">AR-</span> arithmetic, <span class="mono">VN-</span> vendor, and so on); severity carries the routing weight. Source: <span class="mono">docs/exception-taxonomy.md</span>.
+  </p>
+</div>
+
+<div class="panel">
+  <table class="data">
+    <thead><tr>
+      <th>Code</th>
+      <th>Domain</th>
+      <th>Plain English</th>
+      <th>Trigger</th>
+    </tr></thead>
+    <tbody>
+      {% for c in codes %}
+      <tr>
+        <td class="mono">{{ c.code }}</td>
+        <td style="color: var(--text-mute);">{{ c.domain }}</td>
+        <td>{{ summaries.get(c.code, "") }}</td>
+        <td class="text-xs" style="color: var(--text-mute);">{{ c.trigger }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="mt-6 text-xs" style="color: var(--text-dim);">
+  Two codes exist in the taxonomy but are not shown above because their table rows
+  don't parse into <span class="mono">get_policy</span>'s extraction surface: <span class="mono">AR-003</span>
+  (documented but not implemented — see <span class="mono">docs/eval-results.md</span>) and
+  <span class="mono">AR-004</span> (row contains a pipe in its rationale cell; also a known
+  parser limitation).
+</div>
+{% endblock %}

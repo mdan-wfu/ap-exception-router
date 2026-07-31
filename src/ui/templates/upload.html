@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block title %}Add invoice — AP Exception Router{% endblock %}
+{% block content %}
+
+<div class="mb-8 text-center">
+  <div class="text-xs uppercase tracking-widest" style="color: var(--text-dim);">Reviewer path</div>
+  <h1 class="display display-bold text-4xl mt-2">Add invoice</h1>
+  <p class="mt-2 max-w-2xl mx-auto text-sm" style="color: var(--text-mute);">
+    Upload a novel invoice and — with a configured key — run it live from the UI. This is the single explicit dashboard path that can incur cost. Everything else is read-only.
+  </p>
+</div>
+
+<div class="panel panel-body mb-8">
+  {% if key_configured %}
+    <div class="text-xs uppercase tracking-wider mb-2" style="color: var(--green);">✓ XAI_API_KEY configured</div>
+    <div class="text-sm" style="color: var(--text-mute);">The Run live button on the next page will use this key. Expect $0.01–0.10 per invoice.</div>
+  {% else %}
+    <div class="text-xs uppercase tracking-wider mb-2" style="color: var(--amber);">✕ XAI_API_KEY not configured</div>
+    <div class="text-sm" style="color: var(--text-mute);">Uploads are still saved. To process one, add <span class="mono">XAI_API_KEY=xai-...</span> to <span class="mono">.env</span> and re-run from the CLI (the command will be shown on the next page).</div>
+  {% endif %}
+</div>
+
+<div class="grid grid-cols-2 gap-6 mb-8">
+  <div class="panel">
+    <div class="panel-header"><h3 class="display text-base">Upload a file</h3></div>
+    <div class="panel-body">
+      <form method="post" action="/upload" enctype="multipart/form-data" class="space-y-3">
+        <input type="file" name="file" accept=".txt,.pdf,.json,.csv,.xml" required>
+        <div><button class="btn" type="submit">upload</button></div>
+      </form>
+      <div class="text-xs mt-3" style="color: var(--text-dim);">
+        Accepted: <span class="mono">.txt .pdf .json .csv .xml</span>. Saved to <span class="mono">data/uploads/</span> (gitignored).
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header"><h3 class="display text-base">Or paste text</h3></div>
+    <div class="panel-body">
+      <form method="post" action="/upload" class="space-y-3">
+        <input type="text" name="pasted_name" placeholder="filename (default: pasted_invoice.txt)" class="w-full">
+        <textarea name="pasted" rows="10" class="w-full" placeholder="Paste invoice text here…"></textarea>
+        <div><button class="btn" type="submit">save</button></div>
+      </form>
+    </div>
+  </div>
+</div>
+
+{% if recent_uploads %}
+<section class="panel">
+  <div class="panel-header"><h3 class="display text-base">Uploaded files</h3></div>
+  <table class="data">
+    <thead><tr><th>Name</th><th class="text-right">Size</th></tr></thead>
+    <tbody>
+      {% for u in recent_uploads %}
+      <tr><td><a class="mono" href="/upload/{{ u.name }}">{{ u.name }}</a></td>
+          <td class="text-right mono">{{ u.size }} B</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+{% endblock %}

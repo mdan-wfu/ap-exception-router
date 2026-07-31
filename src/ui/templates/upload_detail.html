@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}{{ filename }} — upload{% endblock %}
+{% block content %}
+
+<div class="mb-8">
+  <a class="text-sm" href="/upload">← uploads</a>
+  <h1 class="display display-bold text-3xl mt-3">{{ filename }}</h1>
+  <p class="text-sm mt-1" style="color: var(--text-mute);">
+    Saved to <span class="mono">{{ path }}</span> · {{ size }} B
+  </p>
+</div>
+
+<div class="grid grid-cols-2 gap-6">
+  <div class="panel">
+    <div class="panel-header"><h3 class="display text-base">Preview</h3></div>
+    <pre class="code-panel p-4 text-xs overflow-auto" style="max-height: 520px; white-space: pre-wrap; border: 0; border-radius: 0;">{{ preview }}</pre>
+  </div>
+
+  <div class="panel panel-body">
+    <h3 class="display text-base mb-4">Process</h3>
+    {% if key_configured %}
+      <div class="prose text-sm" style="color: var(--text-mute); max-width: none;">
+        Clicking <strong style="color: var(--red);">Run live</strong> will make real API calls
+        against your xAI account. Expected cost: <span class="mono">~$0.01–0.10</span>
+        (a per-invoice circuit breaker in <span class="mono">src/llm/agent_loop.py</span> caps
+        model and tool calls). Fresh cassettes get written under
+        <span class="mono">data/cassettes/</span> so this invoice replays for free on the next
+        page load.
+      </div>
+      <form method="post" action="/upload/{{ filename }}/run" class="mt-6" onsubmit="return confirm('Run live? This makes real API calls and incurs cost on your xAI account.');">
+        <input type="hidden" name="confirm" value="yes">
+        <button class="btn btn-danger" type="submit">Run live — I authorize this call</button>
+      </form>
+    {% else %}
+      <div class="text-xs uppercase tracking-wider mb-2" style="color: var(--amber);">✕ XAI_API_KEY not set</div>
+      <div class="prose text-sm mb-4" style="color: var(--text-mute); max-width: none;">
+        A live call is required to process a new invoice. From the terminal:
+      </div>
+      <pre class="code-panel p-4 text-xs" style="border: 0;">
+# 1. Put your key in .env
+echo 'XAI_API_KEY=xai-YOUR-KEY-HERE' &gt;&gt; .env
+
+# 2. Run this exact invoice live
+python main.py --invoice_path {{ path }} --live
+# → ~$0.01–0.10, cassette written to data/cassettes/</pre>
+      <div class="text-xs mt-4" style="color: var(--text-dim);">
+        After the run, this invoice appears in <a href="/">the queue</a> like any other.
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+{% endblock %}
