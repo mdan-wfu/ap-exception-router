@@ -41,14 +41,25 @@ def main() -> None:
     )
     from src.graph import run_one
     from src.llm.agent_loop import CircuitBreakerTripped
+    from src.observability import (
+        build_manifest, build_run_record, format_manifest_lines, write_jsonl,
+    )
+
+    manifest = build_manifest()
+    for line in format_manifest_lines(manifest):
+        console.print(f"[dim]{line}[/dim]")
 
     if args.invoice_path:
+        import time
+        started = time.perf_counter()
         try:
             state = run_one(args.invoice_path)
         except CircuitBreakerTripped as exc:
             console.print(f"[bold red]circuit breaker tripped:[/bold red] {exc}")
             raise SystemExit(1)
+        elapsed = time.perf_counter() - started
         print_single_result(args.invoice_path, state)
+        _emit_jsonl(manifest, [_record_from_state(args.invoice_path, state, elapsed)])
         return
 
     # -- batch --
@@ -76,6 +87,7 @@ def main() -> None:
 
     seen: set[str] = set()
     rows = []
+    jsonl_records: list = []
     total_cost = Decimal("0")
     for path, extraction in extractions:
         num = extraction.invoice.invoice_number
@@ -123,10 +135,48 @@ def main() -> None:
             "findings": n_findings, "model_calls": n_models, "tool_calls": n_tools,
             "cost": float(cost),
         })
+        jsonl_records.append(_record_from_state(str(path), state, elapsed))
         print_batch_row(len(rows), 16, num, outcome, n_models, n_tools,
                         float(cost), float(total_cost), elapsed)
 
     print_batch_summary(rows)
+    _emit_jsonl(manifest, jsonl_records)
+
+
+def _record_from_state(path: str, state, elapsed: float):
+    """Compose an observability record from a terminal graph state."""
+    from src.observability import build_run_record
+    inv = state.get("invoice")
+    dec = state.get("decision")
+    return build_run_record(
+        invoice_path=path,
+        invoice_number=inv.invoice_number if inv else "(unknown)",
+        outcome=dec.outcome.value if dec else "FAILED",
+        findings=state.get("findings", []),
+        nodes_fired=state.get("nodes_fired", []),
+        model_calls=state.get("model_calls", []),
+        tool_calls=state.get("tool_calls", []),
+        scribe_note=state.get("scribe_note"),
+        elapsed_seconds=elapsed,
+        terminal_status=(
+            state.get("terminal_status").value
+            if hasattr(state.get("terminal_status"), "value")
+            else (state.get("terminal_status") or "UNKNOWN")
+        ),
+        failure_reason=state.get("failure_reason"),
+        human_outcome=state.get("human_outcome"),
+        human_note=state.get("human_note"),
+        settlement_result=state.get("settlement_result"),
+        mock_payment_reference=state.get("mock_payment_reference"),
+    )
+
+
+def _emit_jsonl(manifest, records):
+    """Write the batch JSONL. The path is intentionally NOT printed to stdout
+    (the filename contains a timestamp, and demo output must be deterministic
+    for the Phase 7 byte-identical check). Reviewers can `ls runs/*.jsonl`."""
+    from src.observability import write_jsonl
+    write_jsonl(manifest, records)
 
 
 if __name__ == "__main__":
