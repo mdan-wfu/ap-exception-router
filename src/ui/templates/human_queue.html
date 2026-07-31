@@ -33,7 +33,7 @@
             </div>
           </div>
           <div class="text-right pl-6" style="border-left: 1px solid var(--border);">
-            <div class="text-xs uppercase tracking-widest mb-1" style="color: var(--ink-mute);">Amount at stake</div>
+            <div class="text-xs uppercase tracking-widest mb-1" style="color: var(--ink-mute);">Amount Payable</div>
             <div class="amount-hero">${{ "{:,.2f}".format(r.stated_total_usd or 0) }}</div>
             <div class="text-xs mt-2" style="color: var(--ink-mute);">USD</div>
           </div>
@@ -57,10 +57,10 @@
           <span class="chip chip-escalate">ESCALATE — needs your judgment</span>
           <span class="text-xs" style="color: var(--ink-mute);">the system chose not to decide on its own</span>
         </div>
-        <details class="text-sm">
-          <summary class="cursor-pointer" style="color: var(--accent);">why (full rationale)</summary>
-          <div class="prose text-sm mt-3" style="max-width: 68ch; color: var(--ink-mid);">{{ r.rationale }}</div>
-        </details>
+        <div>
+          <a href="/invoice/{{ r.invoice_number }}" class="text-sm">See the full analysis →</a>
+          <div class="text-xs mt-1" style="color: var(--ink-mute);">the evidence, the system's reasoning, and the challenge against it</div>
+        </div>
       </div>
 
       <!-- Step 4: What you can do -->
@@ -98,16 +98,17 @@
 
 <!-- Resolved section -->
 {% if resolved %}
-<section>
+<section x-data="{ open: null }">
   <div class="flex items-baseline gap-3 mb-4">
     <h2 class="display text-lg">Model vs human — recent decisions</h2>
-    <span class="text-sm" style="color: var(--ink-mute);">what the system said, what you (or the fixture) said, and whether you agreed</span>
+    <span class="text-sm" style="color: var(--ink-mute);">what the system said, what you (or the fixture) said, and whether you agreed. <strong>Amend</strong> to correct a mistaken decision — appends a new record, never overwrites.</span>
   </div>
   <div class="card">
     <table class="data">
       <thead><tr>
         <th>Invoice</th><th>System said</th><th>You said</th><th>Agreement</th>
         {% if mixed %}<th>Source</th>{% endif %}
+        <th></th>
       </tr></thead>
       <tbody>
       {% for r in resolved %}
@@ -123,6 +124,42 @@
           {% else %}<span class="text-xs" style="color: var(--ink-mute);">clerk</span>{% endif %}
         </td>
         {% endif %}
+        <td class="text-right">
+          <a href="/invoice/{{ r.invoice_number }}" class="text-xs mr-3">See analysis →</a>
+          <button class="btn" @click="open = (open === '{{ r.invoice_number }}' ? null : '{{ r.invoice_number }}')">amend</button>
+        </td>
+      </tr>
+      <tr x-show="open === '{{ r.invoice_number }}'" x-cloak>
+        <td colspan="{{ 6 if mixed else 5 }}" style="background: var(--paper-alt); border-bottom: 2px solid var(--border-strong);">
+          <div class="p-4">
+            <div class="text-xs mb-3" style="color: var(--ink-mid);">
+              Amending appends a new decision. The current outcome
+              (<strong>{{ r.effective_outcome }}</strong>) and every prior decision stay visible on the audit trail.
+              {% if r.effective_outcome == "APPROVE" %}
+                <span style="color: var(--red);">Because this invoice has already been paid, amending away from APPROVE will flag a payment reversal — the system cannot un-call a payment.</span>
+              {% endif %}
+            </div>
+            <form method="post" action="/invoice/{{ r.invoice_number }}/amend"
+                  class="flex flex-wrap items-start gap-3">
+              <div>
+                <label class="text-xs uppercase tracking-wider block mb-1" style="color: var(--ink-mute);">new outcome</label>
+                <select name="new_outcome" required>
+                  <option value="APPROVE">APPROVE</option>
+                  <option value="REJECT">REJECT</option>
+                  <option value="HOLD">HOLD</option>
+                </select>
+              </div>
+              <div class="flex-1 min-w-64">
+                <label class="text-xs uppercase tracking-wider block mb-1" style="color: var(--ink-mute);">reason (required)</label>
+                <input name="reason" type="text" required class="w-full"
+                       placeholder="Why is this being changed? Recorded on the audit trail.">
+              </div>
+              <div class="pt-5">
+                <button class="btn btn-danger" type="submit">append amendment</button>
+              </div>
+            </form>
+          </div>
+        </td>
       </tr>
       {% endfor %}
       </tbody>

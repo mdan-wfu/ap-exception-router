@@ -49,16 +49,32 @@
   .prose { font-family: Georgia, "Times New Roman", serif; line-height: 1.7; }
   .mono, code { font-family: "SF Mono", "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace; font-size: 12px; }
 
-  /* Light card = the default surface */
-  .card { background: var(--paper); border: 1px solid var(--border); border-radius: 6px; }
-  .card-header { border-bottom: 1px solid var(--border); padding: 14px 20px; }
+  /* Light body = content. Dark header = structural weight. This is the
+     50/50 balance — content stays legible for sustained reading while the
+     headers, top nav, hero panels, and table headers carry the frame. */
+  .card { background: var(--paper); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .card-header {
+    background: var(--ink-dark); color: var(--text-inv);
+    padding: 12px 20px; border-bottom: 1px solid var(--ink-dark);
+  }
+  .card-header .display, .card-header h1, .card-header h2, .card-header h3 { color: var(--text-inv); }
+  .card-header a { color: #93c5fd; }
+  .card-header select {
+    background: var(--ink-mid); border-color: #475569; color: var(--text-inv);
+  }
+  .card-header select option { background: var(--paper); color: var(--text); }
   .card-body { padding: 20px; }
   .rule { border-top: 1px solid var(--border); }
 
   /* Legacy aliases so pre-existing markup in detail.html / duplicate.html
-     renders under the light theme without a bulk find-replace. */
-  .panel { background: var(--paper); border: 1px solid var(--border); border-radius: 6px; }
-  .panel-header { border-bottom: 1px solid var(--border); padding: 14px 20px; }
+     picks up the darkened header without a bulk find-replace. */
+  .panel { background: var(--paper); border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .panel-header {
+    background: var(--ink-dark); color: var(--text-inv);
+    padding: 12px 20px; border-bottom: 1px solid var(--ink-dark);
+  }
+  .panel-header .display, .panel-header h1, .panel-header h2, .panel-header h3 { color: var(--text-inv); }
+  .panel-header a { color: #93c5fd; }
   .panel-body { padding: 20px; }
 
   /* Dark panel = emphasis only. Hero metrics, section headers. */
@@ -101,9 +117,10 @@
 
   /* Tables */
   table.data { width: 100%; font-size: 13px; }
-  table.data thead th { text-align: left; color: var(--ink-mute); text-transform: uppercase;
+  table.data thead th { text-align: left; color: var(--ink-dim); text-transform: uppercase;
                         font-size: 10.5px; letter-spacing: 0.06em; font-weight: 600;
-                        padding: 10px 20px; border-bottom: 1px solid var(--border); background: var(--paper-alt); }
+                        padding: 10px 20px; border-bottom: 1px solid var(--ink-dark);
+                        background: var(--ink-dark); }
   table.data tbody td { padding: 12px 20px; border-bottom: 1px solid var(--border); }
   table.data tbody tr:hover { background: var(--paper-alt); }
 
@@ -162,11 +179,12 @@
     </div>
     <nav class="flex items-center gap-6">
       {% set active = active_nav|default('queue') %}
-      <a href="/"       class="nav-tab {% if active == 'queue'  %}active{% endif %}">Queue</a>
-      <a href="/queue"  class="nav-tab {% if active == 'review' %}active{% endif %}">Human review</a>
-      <a href="/held"   class="nav-tab {% if active == 'held'   %}active{% endif %}">Held</a>
-      <a href="/upload" class="nav-tab {% if active == 'upload' %}active{% endif %}">Add invoice</a>
-      <a href="/codes"  class="nav-tab {% if active == 'codes'  %}active{% endif %}">Codes</a>
+      <a href="/"         class="nav-tab {% if active == 'queue'    %}active{% endif %}">Queue</a>
+      <a href="/queue"    class="nav-tab {% if active == 'review'   %}active{% endif %}">Human review</a>
+      <a href="/held"     class="nav-tab {% if active == 'held'     %}active{% endif %}">Held</a>
+      <a href="/payments" class="nav-tab {% if active == 'payments' %}active{% endif %}">Payments</a>
+      <a href="/upload"   class="nav-tab {% if active == 'upload'   %}active{% endif %}">Add invoice</a>
+      <a href="/codes"    class="nav-tab {% if active == 'codes'    %}active{% endif %}">Codes</a>
     </nav>
   </div>
 </header>

@@ -68,30 +68,8 @@
 {% endif %}
 {% endmacro %}
 
-<section class="mb-10 grid grid-cols-2 gap-6">
-  <div class="card">
-    <div class="card-header text-center">
-      <h3 class="display text-base">Exceptions — provided</h3>
-      <div class="text-xs mt-1" style="color: var(--ink-mute);">by category · <a href="/codes">what these codes mean →</a></div>
-    </div>
-    <div class="card-body">
-      {{ bars(provided_findings, provided_findings[0][2] if provided_findings else 1) }}
-    </div>
-  </div>
-  {% if adversarial_findings %}
-  <div class="card">
-    <div class="card-header text-center">
-      <h3 class="display text-base">Exceptions — adversarial</h3>
-      <div class="text-xs mt-1" style="color: var(--ink-mute);">by category · <a href="/codes">what these codes mean →</a></div>
-    </div>
-    <div class="card-body">
-      {{ bars(adversarial_findings, adversarial_findings[0][2] if adversarial_findings else 1) }}
-    </div>
-  </div>
-  {% else %}<div></div>{% endif %}
-</section>
-
-<section x-data="{ outcome: 'ALL', corpus: 'ALL' }" class="card">
+<!-- E1: queue (the work) sits above the exceptions chart (context) -->
+<section x-data="{ outcome: 'ALL', corpus: 'ALL' }" class="card mb-10">
   <div class="card-header flex flex-wrap items-baseline gap-4">
     <h3 class="display text-base">Invoices</h3>
     <span class="text-xs" style="color: var(--ink-mute);">{{ runs|length }} total</span>
@@ -121,10 +99,11 @@
       <tr>
         <th>Invoice</th>
         <th>Vendor</th>
-        <th class="text-right">Total</th>
+        <th class="text-right">Total Amount Payable</th>
         <th>Outcome</th>
         <th class="text-right">Findings</th>
         <th>Corpus</th>
+        <th></th>
       </tr>
     </thead>
     <tbody>
@@ -137,7 +116,7 @@
           {% endif %}
         </td>
         <td style="color: var(--ink-mid);">{{ r.vendor_name or "(empty)" }}</td>
-        <td class="text-right mono">${{ "%.2f"|format(r.stated_total_usd or 0) }}</td>
+        <td class="text-right mono">${{ "{:,.2f}".format(r.stated_total_usd or 0) }}</td>
         <td>
           <span class="chip chip-{{ r.effective_outcome|lower }}">{{ r.effective_outcome }}</span>
           {% if r.amendment_count > 0 %}
@@ -146,10 +125,35 @@
         </td>
         <td class="text-right mono">{{ r.n_findings }}</td>
         <td><span class="chip chip-{{ r.corpus }}">{{ r.corpus }}</span></td>
+        <td class="text-right"><a href="/invoice/{{ r.invoice_number }}" class="text-xs">See analysis →</a></td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
+</section>
+
+<!-- Context: exception categories below the work -->
+<section class="mb-10 grid grid-cols-2 gap-6">
+  <div class="card">
+    <div class="card-header text-center">
+      <h3 class="display text-base">Exceptions — provided</h3>
+      <div class="text-xs mt-1" style="color: var(--ink-mute);">by category · <a href="/codes">what these codes mean →</a></div>
+    </div>
+    <div class="card-body">
+      {{ bars(provided_findings, provided_findings[0][2] if provided_findings else 1) }}
+    </div>
+  </div>
+  {% if adversarial_findings %}
+  <div class="card">
+    <div class="card-header text-center">
+      <h3 class="display text-base">Exceptions — adversarial</h3>
+      <div class="text-xs mt-1" style="color: var(--ink-mute);">by category · <a href="/codes">what these codes mean →</a></div>
+    </div>
+    <div class="card-body">
+      {{ bars(adversarial_findings, adversarial_findings[0][2] if adversarial_findings else 1) }}
+    </div>
+  </div>
+  {% else %}<div></div>{% endif %}
 </section>
 
 {% endblock %}

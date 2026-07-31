@@ -21,11 +21,27 @@
     {% if run.guardrail_override_fired %}<span class="chip chip-critical">§2.2 override</span>{% endif %}
   </div>
   <h1 class="display display-bold text-4xl mt-3">{{ run.invoice_number }}</h1>
-  <p class="text-sm mt-1" style="color: var(--text-mute);">
-    {{ run.vendor_name or "(no vendor name extracted)" }} · ${{ "%.2f"|format(run.stated_total_usd or 0) }} {{ run.currency or "USD" }} · {{ run.source_format }} adapter
+  <p class="text-sm mt-1" style="color: var(--ink-mute);">
+    {{ run.vendor_name or "(no vendor name extracted)" }} · ${{ "{:,.2f}".format(run.stated_total_usd or 0) }} {{ run.currency or "USD" }} · {{ run.source_format }} adapter
     {% if run.invoice_number == "INV-1004" %} · <a href="/duplicate/INV-1004">see duplicate diff →</a>{% endif %}
   </p>
 </div>
+
+<!-- Reason callout — hold / amendment context, above the fold -->
+{% if reason_callout %}
+<div class="mb-6 p-4 rounded"
+     style="background: {% if reason_callout.kind == 'amendment' %}var(--violet-soft){% else %}var(--amber-soft){% endif %};
+            border: 1px solid {% if reason_callout.kind == 'amendment' %}#c4b5fd{% else %}#fcd34d{% endif %};
+            border-left: 4px solid {% if reason_callout.kind == 'amendment' %}var(--violet){% else %}var(--amber){% endif %};">
+  <div class="flex items-baseline gap-3">
+    <span class="chip chip-{% if reason_callout.kind == 'amendment' %}amended{% else %}hold{% endif %}">
+      {% if reason_callout.kind == 'amendment' %}amended → {{ reason_callout.outcome }}{% else %}currently on hold{% endif %}
+    </span>
+    <span class="text-xs" style="color: var(--ink-mute);">reason recorded by the last person to touch this invoice</span>
+  </div>
+  <div class="prose text-sm mt-2" style="color: var(--ink-dark); max-width: 68ch;">{{ reason_callout.reason }}</div>
+</div>
+{% endif %}
 
 <!-- 1. Source ⟷ Extracted -->
 <div class="grid grid-cols-2 gap-6 mb-8">
