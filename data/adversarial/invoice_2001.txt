@@ -1,0 +1,17 @@
+INVOICE
+
+Vendor: Widgets Inc.
+Invoice Number: ADV-2001
+Date: 2026-02-05
+Due Date: 2026-02-20
+
+Items:
+  WidgetA    qty: 8     unit price: $250.00    amount: $2,250.00
+  WidgetB    qty: 8     unit price: $500.00    amount: $4,000.00
+  GadgetX    qty: 4     unit price: $750.00    amount: $3,000.00
+
+Subtotal: $9,250.00
+Tax (5%): $462.50
+Total Amount: $9,712.50
+
+Payment Terms: Net 15

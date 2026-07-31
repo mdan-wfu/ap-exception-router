@@ -1,0 +1,19 @@
+{
+  "invoice_number": "ADV-2002",
+  "vendor": {
+    "name": "Precision Parts Ltd.",
+    "address": "742 Evergreen Terrace, Springfield, IL 62704"
+  },
+  "date": "2026-02-06",
+  "due_date": "2026-03-08",
+  "line_items": [
+    {"item": "WidgetA", "quantity": 6, "unit_price": 250.00},
+    {"item": "WidgetB", "quantity": 4, "unit_price": 500.00}
+  ],
+  "subtotal": 3500.00,
+  "tax_rate": 0.08,
+  "tax_amount": 210.00,
+  "total": 3710.00,
+  "currency": "USD",
+  "payment_terms": "Net 30"
+}

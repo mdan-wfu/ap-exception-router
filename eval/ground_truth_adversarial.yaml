@@ -1,0 +1,88 @@
+# Ground truth for the AUTHORED adversarial invoices in data/adversarial/.
+#
+# Written BEFORE the invoices ran through the system. Authored-then-scored,
+# never scored-then-authored — the reviewer can verify by git log timestamps.
+#
+# Kept in a separate file from ground_truth.yaml so the provided corpus and
+# the authored set are never conflated in reporting.
+
+INV-2001:
+  files: [invoice_2001.txt]
+  vendor_name: "Widgets Inc."
+  currency: USD
+  stated_total_usd: 9712.50
+  line_item_count: 3
+  aggregate_by_canonical: {WidgetA: 8, WidgetB: 8, GadgetX: 4}
+  payment_terms: "Net 15"
+  target_code: AR-001
+  # AR-001 target: line 1 states $2,250 for 8 × $250 (expected $2,000, delta +$250).
+  # PO-002 co-fires because the total sits in the 5% near-threshold band ($9,500–10,000).
+  must_fire: [AR-001, PO-002]
+  may_fire: []
+  expected_outcome: [ESCALATE]
+
+INV-2002:
+  files: [invoice_2002.json]
+  vendor_name: "Precision Parts Ltd."
+  currency: USD
+  stated_total_usd: 3710.00
+  line_item_count: 2
+  aggregate_by_canonical: {WidgetA: 6, WidgetB: 4}
+  payment_terms: "Net 30"
+  target_code: AR-003
+  # AR-003 target: subtotal 3500, tax_rate stated 0.08, tax_amount stated 210
+  # (expected 280 at 8%; the delta is -70). AR-003 is DOCUMENTED in the
+  # taxonomy but NOT implemented in `src/validators/arithmetic.py` — the tax
+  # check falls out of the grand-total sum, not from a standalone rate check
+  # (see the module docstring). So this authored invoice will NOT trip any
+  # finding; the adversarial exercise surfaces the validator gap.
+  # Ground truth must_fire is empty and reflects the current implementation;
+  # AR-003 is recorded as may_fire so the eval reports the miss for a reader.
+  must_fire: []
+  may_fire: [AR-003]
+  expected_outcome: [APPROVE]
+
+INV-2003:
+  files: [invoice_2003.csv]
+  vendor_name: "Acme Industrial Supplies"
+  currency: USD
+  stated_total_usd: 900.00
+  line_item_count: 1
+  aggregate_by_canonical: {WidgetA: 5}
+  # Row-per-item CSV format has no payment_terms column (same limitation
+  # observed on the provided-corpus INV-1007 / INV-1015). Ground truth
+  # matches the adapter's actual capability.
+  payment_terms: null
+  target_code: PR-002
+  # PR-002 target: WidgetA at $180 is 28% below the $250 reference
+  # (tolerance ±5%). LOW severity, single finding — Adjudicator should
+  # APPROVE (a favorable-looking discount is not a hard defect).
+  must_fire: [PR-002]
+  may_fire: []
+  expected_outcome: [APPROVE]
+
+INV-2004:
+  files: [invoice_2004.txt]
+  vendor_name: "Widgets Inc."
+  currency: USD
+  stated_total_usd: 9712.50
+  line_item_count: 3
+  aggregate_by_canonical: {WidgetA: 6, WidgetB: 8, GadgetX: 5}
+  payment_terms: "Net 15"
+  target_code: PO-002
+  # PO-002 target + pair with INV-2001: two invoices from Widgets Inc. within
+  # three days, each at $9,712.50 (in the 5% near-threshold band), jointly
+  # $19,425 — well over the $10K approval threshold. Individually clean
+  # apart from being sub-threshold. This tests threshold structuring as a
+  # pair pattern; the honest expectation is that PO-002 fires on each
+  # invoice INDIVIDUALLY, but there is no cross-invoice aggregator, so the
+  # pattern itself goes unflagged. That is a known gap (Phase 7 planning
+  # cut a cross-invoice detector); the adversarial exercise documents it.
+  must_fire: [PO-002]
+  may_fire: []
+  expected_outcome: [APPROVE, ESCALATE]
+
+# Pair-detection assertion (not scored, reported by the eval):
+#   - INV-2001 and INV-2004 both from "Widgets Inc.", both sub-threshold,
+#     three-day date separation. A cross-invoice aggregator would flag the
+#     pair; the current system does not, and PO-002 fires only individually.

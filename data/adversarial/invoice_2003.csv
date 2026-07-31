@@ -1,0 +1,5 @@
+Invoice Number,Vendor,Date,Due Date,Item,Qty,Unit Price,Line Total
+ADV-2003,Acme Industrial Supplies,2026-02-07,2026-02-22,WidgetA,5,180.00,900.00
+,,,,,,Subtotal:,900.00
+,,,,,,Tax (0%):,0.00
+,,,,,,Total:,900.00
