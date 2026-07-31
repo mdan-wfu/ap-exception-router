@@ -28,7 +28,7 @@ demo: seed audit-reset
 	@rm -f runs/checkpoints.sqlite
 	LLM_MODE=replay HUMAN_GATE_MODE=demo .venv/bin/python main.py --batch --replay
 
-test: seed
+test: demo
 	.venv/bin/pytest tests/
 
 report:
