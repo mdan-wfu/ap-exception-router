@@ -734,3 +734,35 @@ Case (a) — not (b): no post-run correction. Prior wording in `docs/eval-result
 2026-07-31
 
 ---
+
+**Decision (CLI default: replay, not auto):** `python main.py --invoice_path <NEW>` with no explicit flag now defaults to `--replay`. Previously defaulted to `--auto`, which silently fell through to live API calls on a cache miss — a reviewer running her own invoice would be billed with no consent step. `--live` is the explicit opt-in that authorizes spend; `--auto` remains available as a named flag for development but is never the default. main.py also ignores ambient LLM_MODE from the shell so a reviewer's mental model matches: what she typed is what runs.
+**Alternatives considered:** (a) prompt on cache miss — half-solution, still fires the first live call before the prompt on multi-turn agents; (b) require a config flag in .env — hides the invariant.
+**Why:** Quiet spend is the exact surprise the reviewer-friendly cache-miss message exists to prevent. Under `--auto` that message never appears because auto never misses. `test_cli_default_mode.py` locks the behavior: novel invoice + no flags → exit 2, cache-miss message printed, zero API calls made.
+2026-07-31
+
+**Decision (CLI human-gate default stays interactive):** Single-invoice CLI runs default to `HUMAN_GATE_MODE=interactive` — a human at a terminal can answer `interrupt()`. `make demo` overrides to `HUMAN_GATE_MODE=demo` explicitly so it never hangs. No change; noted for the record.
+2026-07-31
+
+**Decision (CLI cost display: 2 decimals, 3 for sub-cent):** Batch summary + progress lines + `make report` render costs as `$X.YY` (nearest cent). Values that would round to `$0.00` are promoted to `$X.YYY` so a per-node sub-cent number isn't misleadingly shown as zero. Also trimmed the batch-summary table to `invoice / outcome / findings / cost` — the file, model-call, and tool-call columns truncated with an ellipsis at any reasonable terminal width; model/tool counts already appear on the per-invoice progress line above the summary. And the batch header now reads `Processing 20 files → 16 invoices after duplicate consolidation` when the two differ, resolving the visual conflict between the file count and the `[1/16]` counter.
+2026-07-31
+
+**Decision (dashboard revision — dark surface, section reorder):** Full theme rewrite to a dark internal-financial-tool aesthetic (slate-900 family, blue-500 accent for interactive elements only, amber for warnings, Playfair for hero numerics and section titles per CLAUDE.md §3b). Detail-page section order changed to reader priority: Source ⟷ Extracted → Findings → Adjudicator rationale → Critic → Scribe → Settlement → Decision history + amendment → Tool trace → Cost. Tool trace and cost are supporting evidence and belong at the bottom, not above the reasoning. Active-tab indicator (underline in accent color) is unambiguous at a glance across Queue / Human review / Held / Add invoice / Codes.
+2026-07-31
+
+**Decision (dashboard demo-fixture chip):** Runs whose `human_note` starts with `demo fixture` render an `auto · demo fixture` chip alongside the human_outcome chip, in the queue table AND on the detail-page header. A reviewer must never mistake a fixture-driven auto-resolution for a real clerk decision.
+2026-07-31
+
+**Decision (Held is a third state):** `human_outcome='HOLD'` lands in a dedicated `/held` view with its own nav tab. Held items remain fully actionable — the same approve/reject/hold buttons appear. Held is NOT resolved; the Model-vs-human table on `/queue` shows only APPROVE/REJECT resolutions.
+2026-07-31
+
+**Decision (amendment audit trail — append-only):** New table `decision_amendments` (add-only schema, no cassette risk). Every amendment appends a row with timestamp, new_outcome, and a REQUIRED reason. The original model decision and any human decision stay in `runs.outcome` / `runs.human_outcome` and remain visible on the detail page. `decision_history(invoice_number)` returns the full chain: model → human (if any) → amendments (any number). If the currently-effective outcome was APPROVE and a PAID settlement fired, an amendment surfaces a `PAYMENT REVERSAL REQUIRED` flag naming the `mock_payment_ref` — the system cannot un-call a payment; the flag is honest about that. This is how AP systems actually work: decisions are appended and corrected, never silently rewritten, because the audit trail is a compliance artifact.
+2026-07-31
+
+**Decision (dashboard upload — the single explicit live-call exception):** `/upload` accepts a file or pasted text, saves to `data/uploads/` (gitignored). `/upload/<name>` shows a preview and a Run-live button only if `XAI_API_KEY` is configured; without a key it shows the exact CLI command to run instead. The button submits with `confirm=yes`; the `POST /upload/<name>/run` route requires BOTH the affirmative confirm AND a real key (rejects the replay placeholder). It briefly switches to `LLM_MODE=auto` for exactly one invocation of `run_one(path)`, records the cassette, restores replay. This is the only path in the dashboard capable of incurring cost, and it takes two intentional steps (upload → click Run live → confirm dialog) to reach it.
+**Why:** Reviewer needs to try her own invoice; the "dashboard is read-only" rule from Phase 11 must not become a wall. Explicit consent + key gate + a labeled cost range is the honest resolution — quieter alternatives (auto-run on upload, "trust me it's cheap") reintroduce exactly the class of surprise the read-only rule prevents.
+2026-07-31
+
+**Decision (finding-code legend):** New `/codes` view lists every code that appears in `docs/exception-taxonomy.md`'s parsed table rows (domain / plain-English one-liner / trigger). Uses the same read path `get_policy` uses; does not touch anything the tool doesn't already read. Individual finding chips in the detail view carry the one-line meaning as a HTML title attribute for hover. Two documented-but-unparseable codes (AR-003, AR-004 — the latter has a literal `|` in its rationale cell) are flagged in a footnote rather than being silently omitted.
+2026-07-31
+
+---
