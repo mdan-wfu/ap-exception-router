@@ -19,6 +19,17 @@ from rich.text import Text
 from src.schema import Outcome, Severity
 
 
+def fmt_cost(amount: float | Decimal) -> str:
+    """Cost display: 2 decimal places (nearest cent), promoted to 3
+    decimals when the value would round to $0.00 so a per-node sub-cent
+    number isn't misleadingly rendered as zero. See DECISIONS 2026-07-31
+    cost-precision."""
+    v = float(amount)
+    if abs(v) < 0.005:  # would round to $0.00
+        return f"${v:.3f}"
+    return f"${v:,.2f}"
+
+
 _SEVERITY_COLOR = {
     Severity.CRITICAL: "bold red",
     Severity.HIGH:     "red",
@@ -120,7 +131,7 @@ def _print_cost_footer(state) -> None:
     cost = sum((mc.cost_usd for mc in mcs), Decimal("0"))
     tools_n = len(state.get("tool_calls", []))
     console.print(
-        f"[dim]cost ${float(cost):.5f}  |  "
+        f"[dim]cost {fmt_cost(cost)}  |  "
         f"{len(mcs)} model call(s)  |  "
         f"{tools_n} tool call(s)  |  "
         f"{len(state.get('nodes_fired', []))} nodes[/dim]"
@@ -132,31 +143,27 @@ def _print_cost_footer(state) -> None:
 # ---------------------------------------------------------------------------
 
 def print_batch_summary(rows: list[dict]) -> None:
-    """Print a table + straight-through-rate summary for the batch."""
+    """Compact batch summary. Columns trimmed to what fits on a normal
+    terminal without truncation; model/tool call counts stay on the
+    per-invoice progress lines above."""
     table = Table(title="Batch summary", title_style="bold", show_header=True)
-    table.add_column("file", style="dim")
     table.add_column("invoice")
     table.add_column("outcome")
     table.add_column("findings", justify="right")
-    table.add_column("model calls", justify="right")
-    table.add_column("tool calls", justify="right")
     table.add_column("cost", justify="right")
 
     total_cost = Decimal("0")
-    dist = {}
+    dist: dict[str, int] = {}
     for r in rows:
         outcome = r["outcome"]
         colour = "bold green" if outcome == "APPROVE" else "bold red" if outcome == "REJECT" else "bold yellow"
         dist[outcome] = dist.get(outcome, 0) + 1
         total_cost += Decimal(str(r["cost"]))
         table.add_row(
-            r["file"],
             r["invoice"],
             Text(outcome, style=colour),
             str(r["findings"]),
-            str(r["model_calls"]),
-            str(r["tool_calls"]),
-            f"${r['cost']:.5f}",
+            fmt_cost(r["cost"]),
         )
     console.print(table)
 
@@ -168,20 +175,28 @@ def print_batch_summary(rows: list[dict]) -> None:
         f"[bold]Straight-through rate:[/bold] "
         f"{approve_n}/{n} = {approve_n / n * 100:.1f}% APPROVE (no human touch)"
     )
-    console.print(f"[bold]Total cost:[/bold]  ${total_cost:.5f}")
-    console.print(f"[bold]Per invoice:[/bold] ${total_cost / n:.5f}")
+    console.print(f"[bold]Total cost:[/bold]  {fmt_cost(total_cost)}")
+    console.print(f"[bold]Per invoice:[/bold] {fmt_cost(total_cost / n)}")
 
 
 # ---------------------------------------------------------------------------
 # Progress indicator (batch)
 # ---------------------------------------------------------------------------
 
-def print_batch_start(n: int) -> None:
+def print_batch_start(n_files: int, n_invoices: int | None = None) -> None:
+    """Batch header. When files and unique invoices differ (duplicate
+    consolidation collapses INV-1011/1012/1013 pairs), the header says so —
+    otherwise `Processing 20 corpus files` followed by `[1/16]` looks like a
+    bug rather than the deduplicator doing its job."""
     console.print()
-    console.print(Panel.fit(
-        f"[bold]Processing {n} corpus files[/bold]",
-        border_style="cyan",
-    ))
+    if n_invoices is None or n_invoices == n_files:
+        msg = f"[bold]Processing {n_files} files[/bold]"
+    else:
+        msg = (
+            f"[bold]Processing {n_files} files → {n_invoices} invoices[/bold]"
+            f"\n[dim]after duplicate consolidation[/dim]"
+        )
+    console.print(Panel.fit(msg, border_style="cyan"))
 
 
 def print_batch_row(idx: int, n: int, invoice_number: str, outcome: str,
@@ -195,5 +210,5 @@ def print_batch_row(idx: int, n: int, invoice_number: str, outcome: str,
         f"  [{idx:2d}/{n}] {invoice_number:10s} "
         f"[{outcome_colour}]{outcome:9s}[/{outcome_colour}] "
         f"models={model_calls:2d} tools={tool_calls:2d} "
-        f"[dim]${cost:.5f}  cum=${cum_cost:.5f}  ({elapsed:.1f}s)[/dim]"
+        f"[dim]{fmt_cost(cost)}  cum={fmt_cost(cum_cost)}  ({elapsed:.1f}s)[/dim]"
     )

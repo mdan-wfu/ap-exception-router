@@ -20,6 +20,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 
+from src.cli import fmt_cost
 from src.config import AUDIT_DB_PATH
 
 
@@ -155,15 +156,15 @@ def main() -> None:
         pct = 100 * b["cost"] / total_cost if total_cost else 0
         t.add_row(
             bucket, str(int(b["n"])),
-            f"${b['cost']:.5f}", f"{pct:.1f}",
+            fmt_cost(b['cost']), f"{pct:.1f}",
             f"{int(b['prompt']):,}", f"{int(b['cached']):,}",
             f"{int(b['completion']):,}", f"{int(b['reasoning']):,}",
         )
     console.print(t)
 
     console.print(
-        f"[bold]Total cost:[/bold] ${total_cost:.5f}    "
-        f"[bold]Per invoice:[/bold] ${total_cost/n:.5f}    "
+        f"[bold]Total cost:[/bold] {fmt_cost(total_cost)}    "
+        f"[bold]Per invoice:[/bold] {fmt_cost(total_cost/n)}    "
         f"[bold]Calls:[/bold] {len(call_rows)}"
     )
 

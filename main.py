@@ -23,17 +23,34 @@ def main() -> None:
                              "data/adversarial for the authored-set eval.")
 
     mode_group = parser.add_mutually_exclusive_group()
-    mode_group.add_argument("--live", action="store_true", help="Hit the real LLM API")
-    mode_group.add_argument("--replay", action="store_true", help="Replay from cassettes only")
+    mode_group.add_argument(
+        "--live", action="store_true",
+        help="Explicit opt-in: hit the real xAI API for cache misses "
+             "and incur cost. Default is --replay.",
+    )
+    mode_group.add_argument(
+        "--replay", action="store_true",
+        help="(Default) Replay from cassettes only; a miss is a hard error "
+             "with a reviewer-friendly message pointing at --live.",
+    )
+    mode_group.add_argument(
+        "--auto", action="store_true",
+        help="Development mode: replay on hit, live on miss. "
+             "NEVER the default — quiet spend is exactly the surprise the "
+             "default-replay rule exists to prevent.",
+    )
 
     args = parser.parse_args()
 
+    # Default is REPLAY. --live is the explicit opt-in that authorises spend.
+    # Ambient LLM_MODE from the shell is IGNORED to keep the reviewer's mental
+    # model tight: what she typed on the command line is what runs.
     if args.live:
         os.environ["LLM_MODE"] = "live"
-    elif args.replay:
-        os.environ["LLM_MODE"] = "replay"
+    elif args.auto:
+        os.environ["LLM_MODE"] = "auto"
     else:
-        os.environ.setdefault("LLM_MODE", "auto")
+        os.environ["LLM_MODE"] = "replay"
 
     if bool(args.invoice_path) == bool(args.batch):
         parser.error("Provide exactly one of --invoice_path or --batch")
@@ -88,8 +105,6 @@ def main() -> None:
         p for p in corpus_dir.iterdir()
         if p.suffix.lower() in {".txt", ".pdf", ".json", ".csv", ".xml"}
     )
-    print_batch_start(len(paths))
-
     extractions = [(p, router_extract(p)) for p in paths]
     invoices = [r.invoice for _, r in extractions]
     dup_findings = defaultdict(list)
@@ -101,6 +116,7 @@ def main() -> None:
     # the INV-1011 payment_terms miss without silently swapping INV-1004's
     # original for its revised submission. See DECISIONS 2026-07-31.
     retained_source_files = select_batch_retentions(invoices)
+    print_batch_start(len(paths), len(retained_source_files))
 
     g = build_graph()
 
