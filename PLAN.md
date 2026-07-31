@@ -183,12 +183,13 @@ Each is pure: `(Invoice, reference) -> list[Finding]`.
 # DAY 3 — Presentation
 
 ## Phase 11 — Dashboard
-- [ ] FastAPI + Jinja + Tailwind CDN + Alpine.js, styled per `CLAUDE.md` §3b. No build step.
-- [ ] Adjudicator tool calls rendered in the trace view — what it asked, what came back
-- [ ] Queue view: all invoices, status chips, straight-through rate, exceptions by category, cost per invoice
-- [ ] Detail view: source document left, extracted fields with confidence right, findings below, adjudicator rationale, critic challenge, final decision
-- [ ] Human review queue with the Scribe's note and approve/reject/hold actions
-- [ ] INV-1004 vs INV-1004-R1 rendered as a side-by-side diff — this is the demo centerpiece
+- [x] FastAPI + Jinja + Tailwind CDN + Alpine.js, styled per `CLAUDE.md` §3b. No build step. `make dashboard` boots at http://127.0.0.1:8000; runs without `.env`.
+- [x] Adjudicator tool calls rendered in the trace view — every call with args, result (collapsible JSON), latency
+- [x] Queue view: all invoices, status chips, straight-through rate, queue depth, exceptions by category (inline SVG horizontal bars), cost per invoice, filterable by outcome and by corpus (Alpine, client-side)
+- [x] Detail view: source document left, extracted fields with confidence right (deterministic 1.0 vs LLM self-reported labeled distinctly), findings grouped by severity CRITICAL-first, adjudicator rationale + critic challenge visually distinct, revision flag preserved as legitimate outcome, scribe note, per-node cost breakdown
+- [x] Human review queue with the Scribe's note and approve/reject/hold actions writing to `human_outcome` (separate from `outcome` per Phase 6; agreement/disagreement surfaced in the resolved section)
+- [x] `/duplicate/INV-1004` — side-by-side diff of original vs revised, the DP-002 finding, the adjudicator's escalation rationale, and the "human must confirm" checklist
+- [x] Provided vs authored corpora visibly separated everywhere — never silently blended
 
 ## Phase 12 — README
 Assembled from `DECISIONS.md`. Drafted in the planning chat, not by Claude Code.

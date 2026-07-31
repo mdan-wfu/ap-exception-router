@@ -700,3 +700,17 @@ Case (a) — not (b): no post-run correction. Prior wording in `docs/eval-result
 2026-07-31
 
 ---
+
+**Decision (Phase 11 dashboard architecture):** FastAPI + Jinja2 + Tailwind CDN + Alpine.js CDN per CLAUDE.md §3b. Zero build step. Read-only over `runs/audit.sqlite` for all aggregate metrics, plus a re-extraction pass via `router_extract(source_file)` for detail views (line items, corrections, extraction_confidence — fields the audit store doesn't persist). Re-extraction runs in `LLM_MODE=replay`; deterministic adapters return instantly and LLM adapters hit committed extractor cassettes. Zero API calls.
+**Alternatives considered:** (a) persist the full Invoice object to the audit store so the dashboard doesn't need to re-extract — schema change, cassette-invalidating, deferred; (b) hydrate a read model into a separate SQLite file — extra plumbing for one field type; (c) render extraction detail from cassette contents — cassettes are LLM I/O records, not extracted objects.
+**Why:** The dashboard reads. Re-extraction against cached adapter results is instant and honest — the same code path the pipeline uses. No dual source of truth.
+2026-07-31
+
+**Decision (Phase 11 provided vs authored separation):** The dashboard filters and separates the two corpora at every aggregate boundary — hero metrics, exceptions-by-category bars, queue table filter. Never blended silently. Corpus attribution is derived at query time from `source_file` prefix (`data/invoices/` = provided, `data/adversarial/` = adversarial).
+**Why:** Same reason the eval keeps them separate. The dashboard is a manager surface; blending would misrepresent both the reviewer's baseline and the exercised-code numbers.
+2026-07-31
+
+**Decision (Phase 11 audit-store limitations noted):** Two fields the dashboard would like but the audit store lacks: (1) full `Invoice` object per run (line items, corrections, extraction_confidence) — solved by re-extraction; (2) per-invoice wall-clock (`runs.started_at` populated) — deferred, same as Phase 8. Both are named here rather than backfilled: extending the audit store's WRITE path would carry cassette risk if any node reads it into an LLM message, and Phase 11's scope is READ.
+2026-07-31
+
+---
