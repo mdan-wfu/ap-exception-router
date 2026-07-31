@@ -794,3 +794,22 @@ Case (a) — not (b): no post-run correction. Prior wording in `docs/eval-result
 2026-07-31
 
 ---
+
+**Decision (payments-membership-rule):** `/payments` lists every PAID settlement — an invoice appears iff `mock_payment` fired for it, not iff its current effective outcome is APPROVE. A row where the decision was later amended away from APPROVE stays visible and is marked `PAID · reversal required` with the amendment reason inline; a red-background sub-row explains the operational consequence (the system cannot un-call a payment; a vendor clawback is required).
+**Alternatives considered:** (a) filter by current effective outcome — hides paid-then-reversed rows, which is the reverse of what the ledger exists to expose; (b) show them but visually equal to a normal PAID — buries the signal that most matters; (c) split into "current payments" + "reversals" views — same set, split without justification.
+**Why:** The ledger's purpose is showing what actually left the business. Silently dropping a paid-then-reversed row would be worse than having no ledger — the money moved regardless of the amendment. The reversal-required flag with the reason is how a real AP function tracks these. Settlement JOIN goes on `(invoice_number, vendor_name)` because `settlements.run_id` is NULL by design (settle node writes before route_outcome persists the run — see Phase 6).
+2026-07-31
+
+**Decision (full-analysis discoverability):** Every invoice row across the dashboard now carries an explicit "See analysis →" link. Detail-page reachability was previously implicit (invoice number was the only link). Applied to: queue table, human-review card, held card, payments ledger, resolved model-vs-human table. The Human Review card additionally replaces the collapsible `<details>why (full rationale)</details>` with a clear inline link plus a one-line hint ("the evidence, the system's reasoning, and the challenge against it"). Also: the resolved table now offers an inline amend control (Alpine expand-row) so mistaken decisions can be corrected without navigating away — routes to the existing POST /invoice/{n}/amend endpoint, same append-only semantics and payment-reversal-required semantics.
+2026-07-31
+
+**Decision (hold/amendment reason above-the-fold):** The most recent hold note or amendment reason renders as a colored callout at the top of the detail page (violet for amendment, amber for hold), above the source-vs-extracted grid. Full chronological history stays in the "Decision history" panel further down as before. The reason is the most important context for the next reader — often the same reviewer days later — and burying it in a history section defeats its purpose.
+2026-07-31
+
+**Decision (visual rebalance to 50/50):** Card headers, panel headers, and data-table headers now render on the dark slate-900 surface (was light). Card bodies stay light. This gives the frame (top nav → hero → section headers → table headers) structural weight while sustained-reading surfaces (invoice content, prose, forms) stay bright and legible. Light-only content with light-only structure read as a marketing page; dark-only across the whole surface read as a terminal wall. The dark structural elements do the separating; borders and rules do the rest.
+2026-07-31
+
+**Decision (terminology — Amount Payable):** Replaced "Amount at stake" (Human Review, Held) and "Total" (queue column header) with "Amount Payable" and "Total Amount Payable" respectively. The concept is the same everywhere on the surface; using one name reduces the vocabulary a first-time reader has to acquire.
+2026-07-31
+
+---
