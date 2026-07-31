@@ -56,10 +56,19 @@ app = FastAPI(title="AP Exception Router — Dashboard", docs_url=None, redoc_ur
 # ---------------------------------------------------------------------------
 
 @app.get("/", response_class=HTMLResponse)
-def queue_view(request: Request):
+def queue_view(request: Request, sort: str = "due_date"):
+    all_runs = data.list_runs()
+    worklist = [r for r in all_runs if r["is_awaiting"] or r["is_held"]]
+    settled = [r for r in all_runs if r["is_resolved"]]
+    # Urgency sort for the worklist; alphabetical for the settled section.
+    worklist.sort(key=lambda r: data.queue_sort_key(r, mode=sort))
+    settled.sort(key=lambda r: r["invoice_number"])
     return templates.TemplateResponse(request, "queue.html", {
         "active_nav": "queue",
-        "runs": data.list_runs(),
+        "worklist": worklist,
+        "settled": settled,
+        "sort": sort,
+        "progress": data.queue_progress(all_runs),
         "provided": data.corpus_summary("provided"),
         "adversarial": data.corpus_summary("adversarial"),
         "provided_findings": data.findings_by_prefix("provided"),

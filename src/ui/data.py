@@ -109,7 +109,27 @@ def list_runs() -> list[dict[str, Any]]:
             and not d["human_outcome"]
             and d["amendment_count"] == 0
         )
+        # Attribution — three-way. Straight-through APPROVEs never touched
+        # by a clerk must NOT be labeled "clerk" anywhere on the surface.
+        # See DECISIONS 2026-07-31 straight-through-attribution.
+        if d["auto_resolved"]:
+            d["source_kind"] = "fixture"
+            d["source_label"] = "demo fixture"
+        elif d["human_outcome"] or d["amendment_count"] > 0:
+            d["source_kind"] = "clerk"
+            d["source_label"] = "clerk"
+        else:
+            d["source_kind"] = "system"
+            d["source_label"] = "system · straight-through"
         result.append(d)
+
+    # Enrich with due-date info for the queue's urgency sort. Re-extract
+    # each source (deterministic adapters return instantly; LLM extractors
+    # hit committed cassettes) — this is a page-load-time cost of ~200ms
+    # for 20 invoices, all cache hits. Cheap enough not to warrant a
+    # schema change to the runs table.
+    _enrich_due_dates(result)
+
     # Sort so awaiting-decision items surface first — the manager's ordering.
     order = {"ESCALATE": 0, "REJECT": 1, "HOLD": 1, "APPROVE": 2, "FAILED": 3}
     result.sort(key=lambda x: (order.get(x["effective_outcome"], 9), x["invoice_number"]))
@@ -121,6 +141,73 @@ def _is_auto_resolved(note: str | None) -> bool:
     A dashboard reviewer must never mistake one of these for a real human
     decision — see B5 of the Phase 11 dashboard revision."""
     return bool(note) and note.strip().lower().startswith("demo fixture")
+
+
+def _enrich_due_dates(rows: list[dict[str, Any]]) -> None:
+    """Populate `due_date` / `due_date_status` / `days_until_due` / `sort_key`
+    on each row via a re-extraction pass. Deterministic adapters return
+    instantly; LLM extractors hit their committed cassettes in replay
+    mode. Zero API calls. Mutates rows in place.
+
+    Status values (see DECISIONS 2026-07-31 queue-null-date-sort-top):
+      - "no_date"  → due_date null or unparseable (INV-1003 'yesterday',
+                     INV-1009 null). Sorted to the TOP — an invoice you
+                     can't date is a problem, not a low priority.
+      - "overdue"  → past today
+      - "due_soon" → within 7 days
+      - "future"   → beyond 7 days"""
+    from datetime import date, datetime
+    today = date.today()
+    for r in rows:
+        ext, _err = re_extract(r["source_file"])
+        due = ext.invoice.due_date if ext and ext.invoice else None
+        due_parsed: date | None = None
+        if due:
+            try:
+                due_parsed = datetime.fromisoformat(str(due)).date()
+            except (ValueError, TypeError):
+                due_parsed = None
+        r["due_date"] = str(due) if due else None
+        if due_parsed is None:
+            r["due_date_status"] = "no_date"
+            r["days_until_due"] = None
+        else:
+            delta = (due_parsed - today).days
+            r["days_until_due"] = delta
+            if delta < 0:
+                r["due_date_status"] = "overdue"
+            elif delta <= 7:
+                r["due_date_status"] = "due_soon"
+            else:
+                r["due_date_status"] = "future"
+
+
+def queue_sort_key(row: dict[str, Any], mode: str = "due_date") -> tuple:
+    """Sort key for the worklist. `mode='due_date'` (default) puts
+    unparseable dates first, then overdue soonest, then future ascending.
+    `mode='amount'` sorts by Amount Payable descending (materiality)."""
+    if mode == "amount":
+        return (-float(row.get("stated_total_usd") or 0), row["invoice_number"])
+    # due_date mode
+    status = row.get("due_date_status", "no_date")
+    days = row.get("days_until_due")
+    # Priority buckets: no_date first (0), then by days (nulls -> 0 within bucket)
+    status_bucket = {"no_date": 0, "overdue": 1, "due_soon": 2, "future": 3}
+    return (status_bucket.get(status, 9),
+            days if days is not None else 0,
+            row["invoice_number"])
+
+
+def queue_progress(rows: list[dict[str, Any]]) -> dict[str, int]:
+    """`{ needed, done }` — for the "N of M reviewed" indicator above
+    the queue. Anything that required a decision counts toward `needed`;
+    anything with an effective terminal outcome counts toward `done`."""
+    needed = sum(1 for r in rows if r["outcome"] == "ESCALATE")
+    done = sum(
+        1 for r in rows
+        if r["outcome"] == "ESCALATE" and r["effective_outcome"] in ("APPROVE", "REJECT")
+    )
+    return {"needed": needed, "done": done}
 
 
 def corpus_summary(corpus: str) -> dict[str, Any]:
