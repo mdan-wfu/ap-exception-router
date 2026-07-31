@@ -5,7 +5,7 @@ Run against `eval/ground_truth.yaml` over the 16-invoice corpus in `LLM_MODE=rep
 ## Manifest (as of 2026-07-31)
 
 ```
-model=grok-4.5  mode=replay  cassettes=292  git=e3c293e
+model=grok-4.5  mode=replay  cassettes=295  git=post-duplicate-selection-fix
 threshold=$10,000  near-band=5%  price-tol=±5%  terms-tol=±2d
 fx={'EUR': 1.14} (as of 2026-07-28)  human-gate=demo
 ```
@@ -16,11 +16,11 @@ Ground truth follows the Phase 7 reconciliation: outcomes are recorded as sets w
 
 | Layer | Result | Denominator |
 |---|---|---|
-| **Extraction accuracy** | 130 / 131 = **99.2%** | field-level checks across all 16 invoices |
+| **Extraction accuracy** | 131 / 131 = **100%** | field-level checks across all 16 invoices |
 | **Must-fire findings** | 41 / 41 = **100%** | codes ground truth says MUST fire, per invoice |
 | **Decision agreement** | 16 / 16 = **100%** | Adjudicator outcome ∈ expected-outcome set |
 
-`make eval` exits 0 (PASS) — no MUST-fire misses, no single-valued outcome divergence.
+`make eval` exits 0 (PASS) — no MUST-fire misses, no single-valued outcome divergence, no extraction misses.
 
 ## Extraction accuracy by source format
 
@@ -28,17 +28,15 @@ Ground truth follows the Phase 7 reconciliation: outcomes are recorded as sets w
 |---|---|---|---|
 | CSV  | 24 | 24 | 100.0% |
 | JSON | 43 | 43 | 100.0% |
-| PDF  | 17 | 18 |  94.4% |
-| TXT  | 38 | 38 | 100.0% |
+| PDF  | 10 | 10 | 100.0% |
+| TXT  | 46 | 46 | 100.0% |
 | XML  |  8 |  8 | 100.0% |
-
-The single miss lives on the PDF path — expected given CLAUDE.md §6's characterization of the INV-1011 PDF as "less complete than its txt source."
 
 ## Named misses
 
 ### Extraction
 
-**INV-1011 / pdf / payment_terms: expected `Net 30`, actual `None`.** The PDF version of INV-1011 omits the "Payment Terms" label that the txt version carries. The alphabetical iteration in `main.py` processes `invoice_1011.pdf` before `invoice_1011.txt` and skips the txt (same invoice number already seen). CLAUDE.md §6 explicitly calls out that dedupe should "prefer the more complete record" — the deduplicator recommends txt as the retained file (via DP-001 evidence), but `main.py`'s loop doesn't currently honor that recommendation. Result: the more-complete txt is discarded and the payment_terms field is lost on this invoice pair. **Named defect, deferred to a future phase** — the fix requires changing the batch iterator to consult DP-001 evidence for the retained-file preference, which changes runtime behavior and would require a live re-record of INV-1011.
+None. The one extraction miss the eval originally surfaced (INV-1011 payment_terms) was fixed in code and is documented below under "The duplicate-selection fix — story of a near-miss."
 
 ### Findings
 
@@ -61,12 +59,35 @@ No other ground-truth changes were made to preserve any score.
 
 From the same run's audit store (via `make report`):
 
-- Total spend: **$1.12406** across 16 invoices
-- Per-invoice mean: **$0.07025**
+- Total spend: **$1.12291** across 16 invoices
+- Per-invoice mean: **$0.07018**
 - Total model calls: 118, distributed adjudicator 34% / critic 31% / adjudicator_revised 30% / scribe 6% of spend
 - Cassette-hit wall clock: under 2 s for the full corpus in replay
 - Queue depth after demo human gate resolves: 7 HOLD (INV-1004, 1005, 1007, 1008, 1009, 1012, 1014)
 - Settled: 5 PAID / 4 REJECTED / 7 QUEUED
+
+## The duplicate-selection fix — story of a near-miss
+
+Worth telling straight, because the near-miss is part of the story.
+
+**What eval surfaced.** INV-1011 arrived as a TXT/PDF pair. The batch loop processed the PDF (alphabetically first) and skipped the TXT. The PDF is genuinely less complete than its TXT counterpart (CLAUDE.md §6). Result: `payment_terms=Net 30` present in TXT was lost. One extraction field, on one invoice.
+
+**Root cause.** `find_duplicates` already computes which member of a DP-001 group to retain (completeness score, tie-break on line-item count, then alphabetical basename). The batch loop ignored that computation and used sorted-order-of-input instead. Fixable in one place.
+
+**The first fix attempt was itself wrong.** Wiring `pick_retained` unconditionally over every `by_invoice_number` group would collapse DP-002 pairs too — and DP-002 pairs are precisely the case where the two files are GENUINELY DIFFERENT submissions (INV-1004's original vs revised). `pick_retained`'s tie-break on line-item count would have swapped INV-1004's original for its revised version because the revision has one more line item. That is a category error: the whole point of DP-002 is that a human must decide which submission is authoritative — the batch loop must never make that call.
+
+**Caught before commit** by the md5 stop-rule on `make demo`: the first-attempt fix changed the demo output, and INV-1004's adjudicate call missed on cassette. The stop-rule was in the task prompt specifically to catch this class of surprise. Nothing was committed while the wrong fix was live.
+
+**Corrected with semantic-hash scoping.** The final fix (`select_batch_retentions`) groups by invoice_number then subgroups by semantic_hash:
+- singleton group → keep it
+- matching-hash group (DP-001, same invoice, multiple files) → `pick_retained` applies
+- differing-hash group (DP-002, different submissions) → alphabetical-first, no completeness scoring
+
+Two tests specifically lock the DP-002 behavior: INV-1004 must select `invoice_1004.json` (alphabetical), NOT tie-break on line-items to `invoice_1004_revised.json`. INV-1011 must select `invoice_1011.txt` (DP-001 completeness winner).
+
+**INV-1011 re-recorded live.** With the scoped fix in place, only INV-1011's adjudicator/critic/scribe chain missed cache — every other invoice replayed correctly. One `LLM_MODE=auto` batch recorded INV-1011's new cassettes. Actual live-API cost of the re-record: **$0.01944** (3 model calls, 1 tool call — a clean-invoice fast path, since the TXT extraction is complete and the invoice under threshold with no findings).
+
+**Result:** extraction accuracy moves from 130/131 (99.2%) to 131/131 (100%). Every other number unchanged. `make demo` byte-identical across consecutive runs at md5 `d31895b6b7320e729324b4e56d93a4f8`.
 
 ## Business extrapolation
 
@@ -84,4 +105,4 @@ We do not claim to eliminate the $2M loss. A defensible framing: the architectur
 
 ## Reproducibility
 
-`make eval` runs the full harness from a clean checkout. The manifest above pins the exact configuration; each rerun writes a `runs/eval-<ts>.json` alongside the terminal output. Two consecutive `make demo` runs produce byte-identical output (Phase 7 determinism check, still passing at md5 `e145ac42a452fa1dd74b75453696a0b9`).
+`make eval` runs the full harness from a clean checkout. The manifest above pins the exact configuration; each rerun writes a `runs/eval-<ts>.json` alongside the terminal output. Two consecutive `make demo` runs produce byte-identical output at md5 `d31895b6b7320e729324b4e56d93a4f8` (Phase 7 determinism check, updated to reflect the INV-1011 re-record).

@@ -663,3 +663,10 @@ The DP-002 finding says the two files exist. `get_prior_invoice` says no prior p
 2026-07-31
 
 ---
+
+**Decision (duplicate-selection fix — semantic-hash scoped):** `select_batch_retentions` in `src/validators/duplicates.py` picks which file of each `by_invoice_number` group the batch orchestrator should process. Scoped by semantic_hash: matching-hash groups (DP-001) go through `pick_retained` (completeness + basename tie-break); differing-hash groups (DP-002) keep alphabetical-first, no auto-selection. `main.py`, `src/batch.py`, and `eval/run_eval.py` all consume it.
+**Alternatives considered:** (a) apply `pick_retained` unconditionally over every group — was the first attempt; would have silently swapped INV-1004's original for its revised submission because the revision has more line items. Caught before commit by the `make demo` md5 stop-rule in the task prompt. (b) revert and keep the INV-1011 miss as a documented known defect — rejected in favor of a real fix once the scoping approach was clear. (c) parse `find_duplicates`' DP-001/DP-002 finding output — more indirect than reading semantic_hash directly.
+**Why:** The completeness rule is only meaningful for a DP-001 group ("same invoice, two files, pick the more-complete extraction"). Applied to DP-002 ("same number, DIFFERENT submissions"), it makes a decision that belongs to the human gate. The semantic-hash check reads the same signal `find_duplicates` uses to distinguish the two cases, and locates the guard at the batch boundary where it belongs. INV-1011 re-recorded live at $0.01944; no other cassette touched. Extraction accuracy moved 130/131 → 131/131 (100%). `make demo` byte-identical at md5 d31895b6b7320e729324b4e56d93a4f8. Near-miss narrated in `docs/eval-results.md` because catching a wrong fix before commit is part of the story worth telling.
+2026-07-31
+
+---
