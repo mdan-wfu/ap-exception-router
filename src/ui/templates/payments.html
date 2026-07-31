@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Payments — AP Exception Router{% endblock %}
+{% block content %}
+
+<div class="mb-8 text-center">
+  <h1 class="display display-bold text-4xl">Payments</h1>
+  <p class="mt-3 max-w-3xl mx-auto text-sm" style="color: var(--ink-mute);">
+    Every disbursement the system has issued. A payment appears here the moment <span class="mono">mock_payment</span>
+    fires — regardless of whether the decision has since been amended. If a decision was reversed after payment,
+    the row is still listed, marked <strong style="color: var(--red);">reversal required</strong>. The money left
+    the building; the ledger has to say so.
+  </p>
+</div>
+
+<!-- Hero totals -->
+<div class="grid grid-cols-3 gap-4 mb-10">
+  <div class="dark-panel p-6 text-center">
+    <div class="text-xs uppercase tracking-wider mb-2 meta">Total paid to date</div>
+    <div class="display display-bold text-4xl">${{ "{:,.2f}".format(totals.total_usd) }}</div>
+    <div class="text-xs mt-2 meta">across {{ totals.count }} payment{{ 's' if totals.count != 1 else '' }}</div>
+  </div>
+  <div class="dark-panel p-6 text-center">
+    <div class="text-xs uppercase tracking-wider mb-2 meta">Payments</div>
+    <div class="display display-bold text-4xl">{{ totals.count }}</div>
+    <div class="text-xs mt-2 meta">disbursements issued</div>
+  </div>
+  <div class="dark-panel p-6 text-center" {% if totals.reversal_count > 0 %}style="border-color: var(--red);"{% endif %}>
+    <div class="text-xs uppercase tracking-wider mb-2 meta">Reversal required</div>
+    <div class="display display-bold text-4xl" style="color: {% if totals.reversal_count > 0 %}#f87171{% else %}var(--ink-dim){% endif %};">{{ totals.reversal_count }}</div>
+    <div class="text-xs mt-2 meta">
+      {% if totals.reversal_count > 0 %}
+        ${{ "{:,.2f}".format(totals.reversal_total_usd) }} to reclaim
+      {% else %}
+        none outstanding
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% if ledger %}
+<section class="card">
+  <div class="card-header flex items-baseline gap-3">
+    <h3 class="display text-base">Ledger</h3>
+    <span class="text-xs" style="color: var(--ink-mute);">most recent first</span>
+  </div>
+  <table class="data">
+    <thead><tr>
+      <th>Invoice</th>
+      <th>Vendor</th>
+      <th class="text-right">Amount Payable</th>
+      <th>Authorized by</th>
+      <th>Payment ref</th>
+      <th>Settled</th>
+      <th></th>
+    </tr></thead>
+    <tbody>
+      {% for p in ledger %}
+      <tr {% if p.reversal_required %}style="background: #fef2f2;"{% endif %}>
+        <td>
+          <a class="mono" href="/invoice/{{ p.invoice_number }}">{{ p.invoice_number }}</a>
+          {% if p.reversal_required %}
+            <div class="mt-1"><span class="chip chip-critical">PAID · reversal required</span></div>
+          {% else %}
+            <div class="mt-1"><span class="chip chip-approve">PAID</span></div>
+          {% endif %}
+        </td>
+        <td style="color: var(--ink-mid);">{{ p.vendor_name or "(no vendor)" }}</td>
+        <td class="text-right mono display" style="font-size: 15px; color: var(--ink-dark);">${{ "{:,.2f}".format(p.amount_usd or 0) }}</td>
+        <td>
+          {% if p.authorizer_kind == 'system' %}
+            <span class="text-sm">System</span>
+            <div class="text-xs" style="color: var(--ink-mute);">straight-through approval</div>
+          {% elif p.authorizer_kind == 'clerk' %}
+            <span class="text-sm">Clerk</span>
+            <div class="text-xs" style="color: var(--ink-mute);">approved in review</div>
+          {% else %}
+            <span class="text-sm">Demo fixture</span>
+            <div class="text-xs" style="color: var(--ink-mute);">auto-resolved for the reviewer walkthrough</div>
+          {% endif %}
+        </td>
+        <td class="mono text-xs">{{ p.mock_payment_ref or "—" }}</td>
+        <td class="text-xs mono" style="color: var(--ink-mute);">{{ p.settled_at[:19] if p.settled_at else "—" }}</td>
+        <td class="text-right"><a href="/invoice/{{ p.invoice_number }}" class="text-xs">See analysis →</a></td>
+      </tr>
+      {% if p.reversal_required %}
+      <tr style="background: #fef2f2;">
+        <td colspan="7" class="px-6 py-3 text-xs" style="color: var(--red); border-bottom: 1px solid var(--border);">
+          <strong>Amendment reason:</strong>
+          <span style="color: var(--ink-mid);">{{ p.reversal_reason or "(no reason recorded)" }}</span>
+          — the system cannot un-call a payment; initiate a clawback with the vendor and record it against the settlement ledger.
+        </td>
+      </tr>
+      {% endif %}
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% else %}
+<div class="card p-10 text-center">
+  <div class="display text-lg mb-2">No payments yet.</div>
+  <div class="text-sm max-w-lg mx-auto" style="color: var(--ink-mute);">
+    Payments appear here when an invoice is approved and <span class="mono">mock_payment</span> fires.
+    Run <span class="mono">make demo</span> from the terminal to populate the ledger with the corpus data.
+  </div>
+</div>
+{% endif %}
+{% endblock %}

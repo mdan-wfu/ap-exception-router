@@ -421,6 +421,105 @@ def resolved_queue() -> list[dict[str, Any]]:
     return [r for r in list_runs() if r["is_resolved"]]
 
 
+# ---------------------------------------------------------------------------
+# Payments ledger — every disbursement that actually fired
+# ---------------------------------------------------------------------------
+
+def payments_ledger() -> list[dict[str, Any]]:
+    """Every PAID settlement in the store, most recent first, enriched
+    with reversal state and authorizer attribution.
+
+    Membership rule: an invoice appears here iff `mock_payment` fired
+    for it — i.e. a PAID settlement row exists. That is NOT the same
+    as "current effective outcome is APPROVE": an APPROVE that got
+    amended to REJECT still shows here because the money left the
+    building regardless of what the decision says now. A ledger that
+    quietly dropped reversed payments would be worse than no ledger.
+    See DECISIONS 2026-07-31 payments-membership-rule."""
+    _ensure_amendments_table()
+    with _conn() as c:
+        # settlements.run_id is NULL by design (settle node writes the
+        # settlement before route_outcome persists the run — Phase 6),
+        # so we join by (invoice_number, vendor_name) instead.
+        rows = c.execute("""
+            SELECT s.invoice_number, s.vendor_name, s.amount_usd,
+                   s.mock_payment_ref, s.settled_at,
+                   r.source_file, r.outcome AS model_outcome,
+                   r.human_outcome, r.human_note
+            FROM settlements s
+            LEFT JOIN runs r
+              ON r.invoice_number = s.invoice_number
+             AND lower(COALESCE(r.vendor_name, '')) = lower(COALESCE(s.vendor_name, ''))
+            WHERE s.settlement_type = 'PAID'
+            ORDER BY s.id DESC
+        """).fetchall()
+        latest_amend = {}
+        amend_reason = {}
+        for a in c.execute("""
+            SELECT invoice_number, new_outcome, reason
+            FROM decision_amendments
+            WHERE id IN (
+                SELECT MAX(id) FROM decision_amendments GROUP BY invoice_number
+            )
+        """).fetchall():
+            latest_amend[a["invoice_number"]] = a["new_outcome"]
+            amend_reason[a["invoice_number"]] = a["reason"]
+
+    out = []
+    for r in rows:
+        d = dict(r)
+        eff = latest_amend.get(d["invoice_number"]) or d["human_outcome"] or d["model_outcome"]
+        d["reversal_required"] = eff != "APPROVE"
+        d["reversal_reason"] = amend_reason.get(d["invoice_number"]) if d["reversal_required"] else None
+        if d["human_outcome"] == "APPROVE":
+            if _is_auto_resolved(d["human_note"]):
+                d["authorizer"] = "demo fixture (auto)"
+                d["authorizer_kind"] = "fixture"
+            else:
+                d["authorizer"] = "clerk"
+                d["authorizer_kind"] = "clerk"
+        else:
+            d["authorizer"] = "system · straight-through"
+            d["authorizer_kind"] = "system"
+        d["corpus"] = corpus_of(d["source_file"] or "")
+        out.append(d)
+    return out
+
+
+def payments_total() -> dict[str, Any]:
+    rows = payments_ledger()
+    total = sum(float(r["amount_usd"] or 0) for r in rows)
+    return {
+        "count": len(rows),
+        "total_usd": total,
+        "reversal_count": sum(1 for r in rows if r["reversal_required"]),
+        "reversal_total_usd": sum(
+            float(r["amount_usd"] or 0) for r in rows if r["reversal_required"]
+        ),
+    }
+
+
+def current_hold_or_amendment_reason(invoice_number: str) -> dict[str, Any] | None:
+    """The reason a reviewer needs to see above-the-fold on the detail
+    page. Precedence: latest amendment > current HOLD note. Returns
+    None if there's nothing to surface."""
+    _ensure_amendments_table()
+    with _conn() as c:
+        a = c.execute("""
+            SELECT new_outcome, reason, timestamp
+            FROM decision_amendments
+            WHERE invoice_number = ? ORDER BY id DESC LIMIT 1
+        """, (invoice_number,)).fetchone()
+    if a:
+        return {"kind": "amendment", "outcome": a["new_outcome"],
+                "reason": a["reason"], "at": a["timestamp"]}
+    run = get_run(invoice_number)
+    if run and run.get("human_outcome") == "HOLD" and run.get("human_note"):
+        return {"kind": "hold", "outcome": "HOLD",
+                "reason": run["human_note"], "at": run.get("finished_at")}
+    return None
+
+
 def demo_fixture_active() -> bool:
     """True if ANY run in the store carries a demo-fixture human_note.
     Used to decide whether the top-of-page 'demo mode' banner shows.

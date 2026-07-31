@@ -86,6 +86,16 @@ def invoice_detail(request: Request, invoice_number: str):
         "effective_outcome": data.effective_outcome(invoice_number),
         "auto_resolved": data._is_auto_resolved(run.get("human_note")),
         "code_summaries": data.FINDING_SUMMARIES,
+        "reason_callout": data.current_hold_or_amendment_reason(invoice_number),
+    })
+
+
+@app.get("/payments", response_class=HTMLResponse)
+def payments_view(request: Request):
+    return templates.TemplateResponse(request, "payments.html", {
+        "active_nav": "payments",
+        "ledger": data.payments_ledger(),
+        "totals": data.payments_total(),
     })
 
 
