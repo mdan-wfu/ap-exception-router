@@ -1,0 +1,15 @@
+{
+  "_readme": "Demo-mode auto-resolutions for the human gate. Keyed by normalized invoice_number. Any invoice not listed here gets the `default` resolution. `make demo` relies on this so the reviewer's run never hangs on interrupt().",
+  "default": {"outcome": "HOLD", "note": "demo fixture — default hold, no clerk decision recorded"},
+
+  "INV-1002": {"outcome": "REJECT", "note": "demo fixture — total exceeds threshold; require manager approval"},
+  "INV-1003": {"outcome": "REJECT", "note": "demo fixture — vendor absent from master with fraud signals"},
+  "INV-1004": {"outcome": "HOLD",   "note": "demo fixture — duplicate pair; needs human comparison of versions"},
+  "INV-1005": {"outcome": "HOLD",   "note": "demo fixture — White House address plus unknown vendor; verify"},
+  "INV-1007": {"outcome": "HOLD",   "note": "demo fixture — grand-total off by -$110; confirm intent"},
+  "INV-1010": {"outcome": "APPROVE", "note": "demo fixture — rush order legitimate; approve premium price"},
+  "INV-1012": {"outcome": "HOLD",   "note": "demo fixture — FastShip rename claim; verify with procurement"},
+  "INV-1013": {"outcome": "REJECT", "note": "demo fixture — aggregate stock overrun; cannot fulfill"},
+  "INV-1014": {"outcome": "HOLD",   "note": "demo fixture — post-FX 8.3% over reference; confirm rate"},
+  "INV-1016": {"outcome": "REJECT", "note": "demo fixture — unknown item WidgetC; off-catalog"}
+}
