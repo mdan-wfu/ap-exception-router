@@ -1,0 +1,213 @@
+# Ground truth for the 16-invoice corpus.
+#
+# Sources, in priority order:
+#   1. eval/source_literals.py (generator forensics — INV-1011/1012/1013)
+#   2. raw source files read directly (every other invoice)
+#   3. CLAUDE.md §6 for the domain assertions (aggregate quantities, etc.)
+#
+# Never derived from the system's own output — that would be circular.
+#
+# `must_fire` — codes the deterministic validators MUST raise on this invoice.
+#               An eval failure here is a validator bug.
+# `may_fire`  — codes that are heuristic / boundary-tolerance (FR-*, some PR-*).
+#               Reported by the eval but never scored against.
+# `expected_outcome` — set of defensible Adjudicator outcomes given the
+#                      Phase 7 reconciliation. Single-valued where the answer
+#                      is clear; multi-valued where the model could
+#                      legitimately land on either side (INV-1005 / 1008 /
+#                      1009 / 1013 / 1016).
+
+INV-1001:
+  files: [invoice_1001.txt]
+  vendor_name: "Widgets Inc."
+  currency: USD
+  stated_total_usd: 5000.00
+  line_item_count: 2
+  aggregate_by_canonical: {WidgetA: 10, WidgetB: 5}
+  payment_terms: "Net 15"
+  must_fire: []
+  may_fire: []
+  expected_outcome: [APPROVE]
+
+INV-1002:
+  files: [invoice_1002.txt]
+  vendor_name: "Gadgets Co."
+  currency: USD
+  stated_total_usd: 15000.00
+  line_item_count: 1
+  aggregate_by_canonical: {GadgetX: 20}
+  payment_terms: "Net 30"
+  must_fire: [PO-001, IN-003, TM-003]
+  may_fire: [TM-001]      # `due_date == invoice_date` may or may not trip depending on parse
+  expected_outcome: [ESCALATE, REJECT]
+
+INV-1003:
+  files: [invoice_1003.txt]
+  vendor_name: "Fraudster LLC"
+  currency: USD
+  stated_total_usd: 100000.00
+  line_item_count: 1
+  aggregate_by_canonical: {FakeItem: 100}
+  payment_terms: "Immediate"
+  must_fire: [VN-001, IN-002, PO-001, TM-003]
+  may_fire: [FR-001, FR-002, PR-004]
+  expected_outcome: [REJECT]
+
+INV-1004:
+  files: [invoice_1004.json, invoice_1004_revised.json]
+  vendor_name: "Precision Parts Ltd."
+  currency: USD
+  stated_total_usd: 1890.00   # the earlier submission is the one that reaches adjudicate
+  line_item_count: 2
+  aggregate_by_canonical: {WidgetA: 3, WidgetB: 2}
+  payment_terms: "Net 30"
+  must_fire: [DP-002]         # batch-scoped duplicate-with-differing-content
+  may_fire: [DP-003]
+  expected_outcome: [ESCALATE]
+
+INV-1005:
+  files: [invoice_1005.json]
+  vendor_name: "Global Supply Chain Partners"
+  currency: USD
+  stated_total_usd: 15225.00
+  line_item_count: 3
+  aggregate_by_canonical: {WidgetA: 14, WidgetB: 10, GadgetX: 8}   # GadgetX 8>5 overflows
+  payment_terms: "Net 60"
+  must_fire: [VN-001, PO-001, IN-003]
+  may_fire: [FR-003]          # White House address is heuristic
+  expected_outcome: [ESCALATE, REJECT]
+
+INV-1006:
+  files: [invoice_1006.csv]
+  vendor_name: "Acme Industrial Supplies"
+  currency: USD
+  stated_total_usd: 2750.00
+  line_item_count: 2
+  aggregate_by_canonical: {WidgetA: 5, WidgetB: 3}
+  payment_terms: "Net 15"
+  must_fire: []
+  may_fire: []
+  expected_outcome: [APPROVE]
+
+INV-1007:
+  files: [invoice_1007.csv]
+  vendor_name: "MegaWidgets Corp"
+  currency: USD
+  stated_total_usd: 15525.00
+  line_item_count: 3
+  aggregate_by_canonical: {WidgetA: 20, WidgetB: 15, GadgetX: 3}   # WidgetA 20>15, WidgetB 15>10
+  payment_terms: null
+  must_fire: [AR-004, PO-001, IN-003]   # -$110 undercharge, over threshold, stock overrun
+  may_fire: []
+  expected_outcome: [ESCALATE]
+
+INV-1008:
+  files: [invoice_1008.txt]
+  vendor_name: "NoProd Industries"
+  currency: USD
+  stated_total_usd: 9900.00
+  line_item_count: 2
+  aggregate_by_canonical: {SuperGizmo: 12, MegaSprocket: 6}   # both unknown
+  payment_terms: null
+  must_fire: [PO-002, IN-001, VN-001, VN-003]   # near-threshold, unknown items, unknown vendor, unknown-vendor-with-email
+  may_fire: [PR-004]
+  expected_outcome: [ESCALATE, REJECT]
+
+INV-1009:
+  files: [invoice_1009.json]
+  vendor_name: ""
+  currency: USD
+  stated_total_usd: -250.00
+  line_item_count: 2
+  aggregate_by_canonical: {WidgetA: -5, WidgetB: 2}   # negative quantity
+  payment_terms: ""
+  must_fire: [AR-005, AR-006, VN-005, AR-002, AR-004]   # negative qty, negative total, empty vendor, subtotal mismatch, total mismatch (stated -250 vs expected 1000)
+  may_fire: []
+  expected_outcome: [ESCALATE, REJECT]
+
+INV-1010:
+  files: [invoice_1010.txt]
+  vendor_name: "Consolidated Materials Group"
+  currency: USD
+  stated_total_usd: 7185.00
+  line_item_count: 4
+  aggregate_by_canonical: {WidgetA: 12, WidgetB: 4, GadgetX: 2}   # WidgetA aggregates to 12<15 ok
+  payment_terms: "Net 30"
+  must_fire: [PR-001, PR-003]   # rush order at $300 vs $250 ref = 20%; same WidgetA at $250 and $300
+  may_fire: []
+  expected_outcome: [ESCALATE, APPROVE]
+
+INV-1011:
+  files: [invoice_1011.txt, invoice_1011.pdf]
+  vendor_name: "Summit Manufacturing Co."
+  currency: USD
+  stated_total_usd: 3000.00
+  line_item_count: 2
+  aggregate_by_canonical: {WidgetA: 6, WidgetB: 3}
+  payment_terms: "Net 30"
+  must_fire: [DP-001]         # deliberate txt+pdf duplicate pair
+  may_fire: []
+  expected_outcome: [APPROVE]
+
+INV-1012:
+  files: [invoice_1012.txt, invoice_1012.pdf]
+  vendor_name: "QuickShip Distributers"
+  vendor_claims: ["formerly FastShip Ltd."]
+  currency: USD
+  stated_total_usd: 9975.00
+  line_item_count: 3
+  aggregate_by_canonical: {WidgetA: 12, WidgetB: 7, GadgetX: 4}
+  payment_terms: "Net 30"
+  corrections_expected: 2     # date OCR + line_amount OCR
+  must_fire: [DP-001, EX-001, VN-001, VN-002, VN-004, PO-002]
+  may_fire: []
+  expected_outcome: [ESCALATE]
+
+INV-1013:
+  files: [invoice_1013.json, invoice_1013.pdf]
+  vendor_name: "Atlas Industrial Supply"
+  currency: USD
+  stated_total_usd: 22562.80    # rendered value includes deliberate +$50 offset
+  line_item_count: 8
+  aggregate_by_canonical: {WidgetA: 22, WidgetB: 18, GadgetX: 9}   # all overflow
+  payment_terms: "Net 60"
+  must_fire: [DP-001, AR-004, IN-003, PO-001, PR-003]
+  may_fire: []
+  expected_outcome: [REJECT, ESCALATE]
+
+INV-1014:
+  files: [invoice_1014.xml]
+  vendor_name: "TechParts International"
+  currency: EUR
+  stated_total_native: 4125.00
+  stated_total_usd: 4702.50     # 4125 * 1.14 FX
+  line_item_count: 2
+  aggregate_by_canonical: {WidgetA: 4, WidgetB: 6}
+  payment_terms: "Net 30"
+  must_fire: [PR-001, PO-003]   # WidgetB €475 → $541.50 = +8.3% over ref; FX applied
+  may_fire: []
+  expected_outcome: [ESCALATE]
+
+INV-1015:
+  files: [invoice_1015.csv]
+  vendor_name: "Reliable Components Inc."
+  currency: USD
+  stated_total_usd: 6500.00
+  line_item_count: 3
+  aggregate_by_canonical: {WidgetA: 10, WidgetB: 5, GadgetX: 2}
+  payment_terms: null
+  must_fire: []
+  may_fire: []
+  expected_outcome: [APPROVE]
+
+INV-1016:
+  files: [invoice_1016.json]
+  vendor_name: "Widgets Inc."
+  currency: USD
+  stated_total_usd: 3233.00
+  line_item_count: 3
+  aggregate_by_canonical: {WidgetA: 4, WidgetB: 2, WidgetC: 3}   # WidgetC unknown
+  payment_terms: "Net 30"
+  must_fire: [IN-001, TM-002]   # unknown item, contracted-terms mismatch (Widgets Inc. Net 30)
+  may_fire: [PR-004]
+  expected_outcome: [ESCALATE, REJECT]
