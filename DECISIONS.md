@@ -859,3 +859,16 @@ Due dates are recovered per row via re-extraction of the source file at page-loa
 2026-07-31
 
 ---
+
+**Decision (demo-digest-replaces-stdout-hash):** The old `make demo` md5 check hashed the CLI output verbatim — a moving target. Every commit changed the git SHA in the manifest header; every cassette add/remove changed the count; wall-clock jitter drifted the `(0.0s)` timings on each row. So the hash mutated on essentially every commit regardless of whether decisions, findings, or costs actually changed — a check that always changes doesn't check anything, and normalized to a rubber stamp.
+
+Replacement: `scripts/demo_digest.py` reads `runs/audit.sqlite` and emits a canonical projection — one line per invoice, sorted by invoice_number, containing outcome, human_outcome, sorted finding codes, stated total (2dp), summed cost (2dp), sorted nodes_fired, sha256 head of scribe_note, settlement type — then md5s the concatenation. `docs/demo-digest.txt` is the committed baseline: `3b55d7b4983775f8de159bd4bae8fb8a`. `make demo-digest-check` computes the current digest and exits nonzero on mismatch, with instructions to update the baseline for deliberate semantic changes. `tests/test_demo_digest.py` locks the same check in CI.
+
+**Why the projection over stdout:** the property worth locking is per-invoice semantics — outcome / findings / cost / node path / scribe — not the presentation. Coupling determinism to stdout meant every CLI polish invalidated the hash without a real regression, and every deliberate semantic change hid inside a moving baseline. The digest is presentation-agnostic: CLI can change freely; column trims, cost precision, header text, manifest fields — none of it moves the hash. What moves the hash is a decision flipping, a finding appearing or disappearing, a cost materially shifting, a different node path, or a different scribe conclusion — exactly what a regression touches.
+
+Sort determinism is enforced everywhere in the projection: rows by invoice_number; findings by code; nodes_fired by string sort. `test_two_consecutive_projections_produce_identical_digest` locks that stability.
+
+Rounding to 2dp on `cost_usd` in the projection is deliberate — token-count noise at the sub-cent level shouldn't invalidate the hash; a critic firing when it didn't before (materially different cost) still shows through.
+2026-08-01
+
+---

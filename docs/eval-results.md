@@ -87,7 +87,7 @@ Two tests specifically lock the DP-002 behavior: INV-1004 must select `invoice_1
 
 **INV-1011 re-recorded live.** With the scoped fix in place, only INV-1011's adjudicator/critic/scribe chain missed cache — every other invoice replayed correctly. One `LLM_MODE=auto` batch recorded INV-1011's new cassettes. Actual live-API cost of the re-record: **$0.01944** (3 model calls, 1 tool call — a clean-invoice fast path, since the TXT extraction is complete and the invoice under threshold with no findings).
 
-**Result:** extraction accuracy moves from 130/131 (99.2%) to 131/131 (100%). Every other number unchanged. `make demo` byte-identical across consecutive runs at md5 `d31895b6b7320e729324b4e56d93a4f8`.
+**Result:** extraction accuracy moves from 130/131 (99.2%) to 131/131 (100%). Every other number unchanged. Two consecutive `make demo` runs produce an identical **demo-digest** — a canonical projection of per-invoice semantics (outcomes, findings, cost, node sequence, scribe hash, settlement) — enforced by `make demo-digest-check` against `docs/demo-digest.txt`. The digest replaces the earlier stdout-md5 check, which coupled determinism to CLI presentation; see DECISIONS 2026-07-31 demo-digest-replaces-stdout-hash.
 
 ## Business extrapolation
 
@@ -105,7 +105,7 @@ We do not claim to eliminate the $2M loss. A defensible framing: the architectur
 
 ## Reproducibility
 
-`make eval` runs the full harness from a clean checkout. The manifest above pins the exact configuration; each rerun writes a `runs/eval-<ts>.json` alongside the terminal output. Two consecutive `make demo` runs produce byte-identical output at md5 `d31895b6b7320e729324b4e56d93a4f8` (Phase 7 determinism check, updated to reflect the INV-1011 re-record).
+`make eval` runs the full harness from a clean checkout. The manifest above pins the exact configuration; each rerun writes a `runs/eval-<ts>.json` alongside the terminal output. Determinism is enforced by `make demo-digest-check` — it computes a canonical projection of `runs/audit.sqlite` (per-invoice outcome, findings, cost, node sequence, scribe hash, settlement) and compares its md5 against the committed baseline in `docs/demo-digest.txt` (currently `3b55d7b4983775f8de159bd4bae8fb8a`). The check exits nonzero on any semantic drift and is immune to CLI polish, manifest metadata, and wall-clock jitter.
 
 ---
 
