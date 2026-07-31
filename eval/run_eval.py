@@ -237,7 +237,7 @@ def run_corpus() -> dict[str, dict]:
     from src.adapters.router import extract as router_extract
     from src.graph import build_graph
     from src.graph_state import GraphState
-    from src.validators import find_duplicates
+    from src.validators import find_duplicates, select_batch_retentions
 
     # Reset audit + checkpoint DBs so replay is deterministic (same reason as
     # `make demo`). If we don't, resumed threads from a prior run will change
@@ -259,14 +259,15 @@ def run_corpus() -> dict[str, dict]:
     for inv, f in find_duplicates(invoices):
         dup_findings[inv.source_file].append(f)
 
+    # Same retained-file selection as main.py — see DECISIONS 2026-07-31.
+    retained_source_files = select_batch_retentions(invoices)
+
     graph = build_graph()
-    seen: set[str] = set()
     states: dict[str, dict] = {}
     for path, extraction in extractions:
-        num = extraction.invoice.invoice_number
-        if num in seen:
+        if extraction.invoice.source_file not in retained_source_files:
             continue
-        seen.add(num)
+        num = extraction.invoice.invoice_number
         seed = dup_findings.get(extraction.invoice.source_file, [])
         initial: GraphState = {
             "source_path": str(path),

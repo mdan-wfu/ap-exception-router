@@ -24,11 +24,17 @@ from src.adapters.router import ExtractionResult, extract as router_extract
 from src.graph import build_graph
 from src.graph_state import GraphState
 from src.schema import Finding, Invoice
-from src.validators import find_duplicates
+from src.validators import find_duplicates, select_batch_retentions
 
 
 def run_batch(paths: list[Path]) -> list[GraphState]:
-    """Extract every file, compute duplicates once, then graph-run each."""
+    """Extract every file, compute duplicates once, then graph-run each.
+
+    Duplicate groups collapse via `select_batch_retentions`: DP-001
+    (matching semantic_hash) → most-complete file; DP-002 (differing
+    semantic_hash) → alphabetical-first, no auto-selection. Prevents
+    double-processing of duplicate pairs (INV-1011/1012/1013) without
+    silently swapping between genuinely different submissions."""
     extractions: list[tuple[Path, ExtractionResult]] = [
         (p, router_extract(p)) for p in paths
     ]
@@ -38,9 +44,13 @@ def run_batch(paths: list[Path]) -> list[GraphState]:
     for inv, finding in find_duplicates(invoices):
         dup_findings[inv.source_file].append(finding)
 
+    retained_source_files = select_batch_retentions(invoices)
+
     graph = build_graph()
     results: list[GraphState] = []
     for (path, extraction), inv in zip(extractions, invoices):
+        if inv.source_file not in retained_source_files:
+            continue
         results.append(_run_with_seed(
             graph, str(path),
             seeded_findings=dup_findings.get(inv.source_file, []),

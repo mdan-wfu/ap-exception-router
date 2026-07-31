@@ -69,7 +69,7 @@ def main() -> None:
     from src.adapters.router import extract as router_extract
     from src.graph import build_graph
     from src.graph_state import GraphState
-    from src.validators import find_duplicates
+    from src.validators import find_duplicates, select_batch_retentions
 
     paths = sorted(
         p for p in CORPUS.iterdir()
@@ -83,17 +83,21 @@ def main() -> None:
     for inv, f in find_duplicates(invoices):
         dup_findings[inv.source_file].append(f)
 
+    # Collapse duplicate groups: DP-001 (matching hash) → most-complete file;
+    # DP-002 (differing hash) → alphabetical-first, do NOT auto-pick. Fixes
+    # the INV-1011 payment_terms miss without silently swapping INV-1004's
+    # original for its revised submission. See DECISIONS 2026-07-31.
+    retained_source_files = select_batch_retentions(invoices)
+
     g = build_graph()
 
-    seen: set[str] = set()
     rows = []
     jsonl_records: list = []
     total_cost = Decimal("0")
     for path, extraction in extractions:
-        num = extraction.invoice.invoice_number
-        if num in seen:
+        if extraction.invoice.source_file not in retained_source_files:
             continue
-        seen.add(num)
+        num = extraction.invoice.invoice_number
 
         seed = dup_findings.get(extraction.invoice.source_file, [])
         initial: GraphState = {
