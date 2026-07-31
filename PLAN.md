@@ -131,12 +131,17 @@ Each is pure: `(Invoice, reference) -> list[Finding]`.
 **Exit:** all 16 invoices produce a decision with rationale.
 
 ## Phase 6 — Gate, settlement, audit
-- [ ] `interrupt()` human gate with `SqliteSaver` checkpointing; auto-resolves from fixture in demo mode so the reviewer's run never hangs
-- [ ] `mock_payment` on approve; logged rejection with reasoning on reject
-- [ ] `RunRecord` written for every invoice: nodes fired, model calls, tokens, latency, cost, findings, rationale, critic exchange, final decision
-- [ ] `rich` CLI output — stages tick, findings surface, reasoning prints, decision lands
+- [x] `interrupt()` human gate with `SqliteSaver` checkpointing; auto-resolves from fixture in demo mode so the reviewer's run never hangs
+- [x] `mock_payment` on approve; logged rejection with reasoning on reject
+- [x] Queryable audit persistence (`src/store/audit.py`): runs / findings / model_calls / tool_calls / settlements as related tables, indexed
+- [x] Settlement idempotency on `(invoice_number, vendor_name)` via `prior_paid_settlement()`
+- [x] `get_prior_invoice` reads real audit data; distinguishes empty-store from no-prior-of-this-number via `store_populated` (fixes the INV-1004 REJECT-on-empty-store bug)
+- [x] `rich` CLI output — stages tick, findings surface, reasoning prints, decision lands
+- [x] Cold-clone `make demo`: `LLM_MODE=replay HUMAN_GATE_MODE=demo`, no `.env` required, deterministic on repeat runs (checkpoint DB cleared at demo start)
+- [x] Cassette portability: `_invoice_summary` emits `source_file` as basename so recordings are machine-independent
 
 **Exit:** `python main.py --batch` processes the corpus end to end. **Sync with planning chat before Day 2.**
+**Exit met:** batch produces 4 APPROVE / 10 ESCALATE / 2 REJECT at $1.12406 (live) / <2s (cold replay). Two consecutive `make demo` runs produce byte-identical output.
 
 ---
 

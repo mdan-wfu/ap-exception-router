@@ -579,3 +579,17 @@ The DP-002 finding says the two files exist. `get_prior_invoice` says no prior p
 2026-07-30
 
 ---
+
+**Decision:** In `_invoice_summary` (adjudicator/critic/scribe context builder), emit `source_file` as basename only (`Path(source_file).name`) instead of the full stored path. The full absolute path stays on the Invoice object for the audit store and dashboard; only the LLM-facing view is stripped.
+**Alternatives considered:** (a) resolve to repo-relative and pass through — still bakes the checkout layout into cassettes; (b) rewrite existing cassettes to strip the prefix — would forge responses the model never gave to the modified request; (c) leave paths absolute and require re-recording per machine — defeats the "cold clone, no API key" objective.
+**Why:** The recorded cassettes contained absolute paths (`/Users/maximiliandaneker/…/data/invoices/…`) inside the LLM message content. Any cold clone in a different filesystem location produced a different SHA-256 fingerprint and missed every agent-node cassette. Basename is the smallest identifier the Adjudicator needs; it makes cassettes machine-independent by construction. Invalidated 274 of 449 recordings; re-recorded via a fresh live corpus run.
+2026-07-31
+
+---
+
+**Decision:** `make demo` clears `runs/checkpoints.sqlite` at start (added `@rm -f runs/checkpoints.sqlite` alongside the existing `audit-reset` dependency). Interactive and queue modes still checkpoint normally.
+**Alternatives considered:** (a) point demo mode at a throwaway checkpoint path via a demo-only env var — extra plumbing for a one-line fix; (b) rely on reviewers to clear manually — invisible failure mode; (c) disable the checkpointer entirely for `--replay` — would break the human-gate resume flow if a real run ever switched into replay mid-stream.
+**Why:** The checkpointer's job is to make interrupted escalations resumable in real operation — correct behavior there. Demo mode has the opposite requirement: a reviewer must see identical output on run 1, run 2, and run 5. Without the clear, a second `make demo` resumed each thread from its prior terminal state and produced truncated / mismatched output. Discovered while smoke-testing the cassette-portability fix: the first replay after a live record hit a cache miss because the checkpointer resumed mid-graph on state that hadn't existed when the cassette was recorded.
+2026-07-31
+
+---
