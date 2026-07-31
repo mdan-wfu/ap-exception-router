@@ -18,17 +18,22 @@ from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-# Import config eagerly so `load_dotenv()` fires at dashboard boot. Without
-# this, `data.xai_key_configured()` reads an empty XAI_API_KEY (dotenv
-# never ran) and the upload-run live path always short-circuits to
-# "Not configured" — the bug that prevented the initial live verification.
-from src import config as _cfg  # noqa: F401  (side-effect import)
-
-# Force replay unconditionally at page render. See Phase 11 hardening.
-# The `LLM_MODE` from .env (set to "replay" for the reviewer's cold clone)
-# is preserved by this line; the assignment is the belt-and-suspenders.
+# ORDER MATTERS. src.config captures LLM_MODE at import time via
+# `from src.config import LLM_MODE` in src.llm.provider. If we import
+# config first and then set os.environ["LLM_MODE"]="replay", src.config's
+# snapshot has already been taken with whatever the ambient value was
+# (default "auto" on cold clone with no .env). The lazy provider
+# singleton then reads mode="auto" and pages render with cache-miss →
+# live spend — exactly the Phase 11 invariant we swore off.
+# So: set the env var BEFORE importing config. load_dotenv() doesn't
+# override existing env vars, so a .env with LLM_MODE=... won't clobber
+# this either.
 os.environ["LLM_MODE"] = "replay"
 os.environ.setdefault("HUMAN_GATE_MODE", "demo")
+
+# Now trigger config's load_dotenv() so XAI_API_KEY (if any) reaches
+# data.xai_key_configured() before the first request.
+from src import config as _cfg  # noqa: F401  (side-effect import)
 
 from src.ui import data
 
