@@ -1,4 +1,4 @@
-.PHONY: install seed audit-reset probe demo demo-adversarial test report eval eval-adversarial dashboard
+.PHONY: install seed audit-reset probe demo demo-adversarial demo-digest demo-digest-check test report eval eval-adversarial dashboard
 
 install:
 	python -m venv .venv
@@ -33,6 +33,31 @@ test:
 
 report:
 	@.venv/bin/python -m scripts.report
+
+# Canonical projection of per-invoice outcomes/findings/costs from the
+# audit store. Prints one line per invoice + a final md5. Replaces the
+# earlier stdout-md5 check that coupled determinism to CLI presentation
+# (any header change, git-SHA change, or format tweak produced a false
+# positive). See DECISIONS 2026-07-31 demo-digest-replaces-stdout-hash.
+demo-digest: demo
+	@.venv/bin/python -m scripts.demo_digest
+
+# Enforceable regression gate — exits nonzero on mismatch against
+# docs/demo-digest.txt. Update the baseline (and note WHY in DECISIONS)
+# only for a deliberate semantic change.
+demo-digest-check: demo
+	@expected=$$(tr -d '[:space:]' < docs/demo-digest.txt); \
+	actual=$$(.venv/bin/python -m scripts.demo_digest | tail -1 | awk '{print $$2}'); \
+	if [ "$$expected" = "$$actual" ]; then \
+		echo "demo-digest OK: $$actual"; \
+	else \
+		echo "demo-digest MISMATCH"; \
+		echo "  expected: $$expected  (docs/demo-digest.txt)"; \
+		echo "  actual:   $$actual"; \
+		echo "If this is a deliberate semantic change, rerun \`make demo-digest\`,"; \
+		echo "copy the md5 into docs/demo-digest.txt, and record why in DECISIONS.md."; \
+		exit 1; \
+	fi
 
 eval:
 	@LLM_MODE=replay HUMAN_GATE_MODE=demo .venv/bin/python -m eval.run_eval
