@@ -15,8 +15,12 @@ from fastapi import FastAPI, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
-# Force replay mode so re-extraction never accidentally calls the API.
-os.environ.setdefault("LLM_MODE", "replay")
+# Force replay mode unconditionally. `setdefault` would inherit an ambient
+# LLM_MODE=live from the reviewer's shell — page renders would then make real
+# API calls against the reviewer's key. The dashboard is a READ surface over
+# recorded runs and must never be capable of incurring cost, regardless of
+# ambient config. See DECISIONS 2026-07-31 dashboard-forced-replay.
+os.environ["LLM_MODE"] = "replay"
 os.environ.setdefault("HUMAN_GATE_MODE", "demo")
 
 from src.ui import data
@@ -55,13 +59,19 @@ def invoice_detail(request: Request, invoice_number: str):
     run = data.get_run(invoice_number)
     if run is None:
         return HTMLResponse(f"<h1>{invoice_number} not found</h1>", status_code=404)
-    ext = data.re_extract(run["source_file"])
+    # Re-extraction degrades gracefully: on failure (missing source file,
+    # cassette miss for a re-encoded file, adapter parse error) render
+    # everything the audit store DID persist (outcome, findings, rationale,
+    # critic, tool trace, per-node cost) with a small inline note where
+    # the enrichment would be.
+    ext, extraction_error = data.re_extract(run["source_file"])
     settlement = data.get_settlement(
         invoice_number, run["vendor_name"] or ""
     )
     return templates.TemplateResponse(request, "detail.html", {
         "run": run,
         "extraction": ext,
+        "extraction_error": extraction_error,
         "invoice": ext.invoice if ext else None,
         "raw_source": data.read_source_text(run["source_file"]),
         "findings": data.get_findings(run["id"]),

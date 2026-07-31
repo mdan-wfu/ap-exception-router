@@ -27,6 +27,12 @@
       </div>
     </div>
     <div class="p-6 text-sm">
+      {% if e.extraction_error %}
+        <div class="mb-4 p-3 rounded text-xs" style="background: var(--amber-bg); color: var(--amber);">
+          Extraction unavailable — {{ e.extraction_error }}. Diff shows only what the sibling could recover.
+        </div>
+      {% endif %}
+      {% if e.invoice %}
       <dl class="grid grid-cols-3 gap-y-2">
         <dt class="text-slate-500">Vendor</dt>
         <dd class="col-span-2">{{ e.invoice.vendor_name }}</dd>
@@ -73,6 +79,9 @@
           </tbody>
         </table>
       </div>
+      {% else %}
+        <p class="text-sm text-slate-500 italic">Sibling file details not renderable — see banner above.</p>
+      {% endif %}
     </div>
   </div>
   {% endfor %}

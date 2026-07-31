@@ -18,15 +18,16 @@ from decimal import Decimal
 from pathlib import Path
 from typing import Any
 
-from src.config import AUDIT_DB_PATH
-
-
 PROVIDED_DIR = "data/invoices"
 ADVERSARIAL_DIR = "data/adversarial"
 
 
 def _conn() -> sqlite3.Connection:
-    c = sqlite3.connect(str(AUDIT_DB_PATH))
+    # Resolve at call time so tests that monkeypatch src.config.AUDIT_DB_PATH
+    # after this module is imported still take effect (a from-import would
+    # cache the module-load value and defeat isolation).
+    from src import config as _cfg
+    c = sqlite3.connect(str(_cfg.AUDIT_DB_PATH))
     c.row_factory = sqlite3.Row
     return c
 
@@ -227,16 +228,30 @@ def get_settlement(invoice_number: str, vendor_name: str) -> dict[str, Any] | No
 # Re-extraction — pull the Invoice object back from source
 # ---------------------------------------------------------------------------
 
-def re_extract(source_file: str):
+def re_extract(source_file: str) -> tuple[Any, str | None]:
     """Re-run the adapter to recover extraction fields the audit store
     doesn't persist (line items, corrections, extraction_confidence).
     Deterministic adapters return instantly; LLM adapters hit their
-    committed cassettes in replay mode. Zero API calls."""
-    from src.adapters.router import extract as router_extract
+    committed cassettes in replay mode. Zero API calls.
+
+    Returns `(extraction, error_message)`:
+      - success: `(ExtractionResult, None)`
+      - missing file: `(None, "source file not found: ...")`
+      - cassette miss on an LLM adapter, parse error, etc.: `(None, "<reason>")`
+
+    The caller renders whatever the audit store has plus a small note where
+    the enrichment would be, rather than 500-ing the page. Failure causes
+    to expect: missing source file, a path recorded from a different
+    checkout that no longer exists, a cassette miss for a file recorded
+    under different conditions."""
     path = Path(source_file)
     if not path.exists():
-        return None
-    return router_extract(path)
+        return None, f"source file not found: {source_file}"
+    try:
+        from src.adapters.router import extract as router_extract
+        return router_extract(path), None
+    except Exception as exc:
+        return None, f"{type(exc).__name__}: {exc}"
 
 
 def read_source_text(source_file: str) -> str:
@@ -278,18 +293,38 @@ def get_duplicate_pair(invoice_number: str) -> list[dict[str, Any]]:
             ).fetchall()
         files = [r["source_file"] for r in rows]
 
+    # Degrade per row, not per page: a single unreadable source file must
+    # not break the diff view — surface a placeholder entry for the missing
+    # side and render whatever's readable for the rest.
     entries = []
     for f in files:
-        ext = re_extract(f)
+        ext, err = re_extract(f)
         if ext is None:
+            entries.append({
+                "source_file": f,
+                "adapter_used": None,
+                "invoice": None,
+                "raw_text": _safe_source_text(f),
+                "extraction_error": err,
+            })
             continue
         entries.append({
             "source_file": f,
             "adapter_used": ext.adapter_used,
             "invoice": ext.invoice,
-            "raw_text": read_source_text(f),
+            "raw_text": _safe_source_text(f),
+            "extraction_error": None,
         })
     return entries
+
+
+def _safe_source_text(source_file: str) -> str:
+    """read_source_text but never raises — swallows file-not-found so the
+    duplicate-diff view still renders even if one member is missing."""
+    try:
+        return read_source_text(source_file)
+    except Exception as exc:
+        return f"(source unavailable: {type(exc).__name__}: {exc})"
 
 
 # ---------------------------------------------------------------------------

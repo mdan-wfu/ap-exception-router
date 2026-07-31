@@ -39,6 +39,12 @@
   </div>
   <div class="card p-6">
     <h3 class="display text-lg mb-4">Extracted</h3>
+    {% if extraction_error %}
+      <div class="mb-4 p-3 rounded text-sm" style="background: var(--amber-bg); color: var(--amber);">
+        <div class="font-semibold">Line-item detail unavailable</div>
+        <div class="text-xs mt-1 text-slate-700">Source file could not be re-extracted — {{ extraction_error }}. The audit-store record (findings, rationale, tool trace, cost) is unaffected and displayed below.</div>
+      </div>
+    {% endif %}
     {% if invoice %}
       <dl class="grid grid-cols-3 gap-y-3 text-sm">
         <dt class="text-slate-500">Invoice #</dt>
