@@ -844,3 +844,18 @@ Also: `src/ui/app.py` now imports `src.config` at module load so `load_dotenv()`
 2026-07-31
 
 ---
+
+**Decision (queue-as-worklist):** Landing page split into two sections: "Needs your decision" (awaiting + held) above the fold, "Settled invoices" collapsed below with a count and expand toggle. Landing is triage + hero metrics; Human Review is the guided decision surface. They serve different jobs so both stay — landing is scan-quickly-and-route-into-Human-Review, Human Review is walk-through-one-invoice-at-a-time. Consolidating would collapse both into the harder-to-scan card view.
+2026-07-31
+
+**Decision (queue-null-date-sort-top):** Worklist sorts by urgency: null / unparseable due_date first (INV-1003's "yesterday", INV-1009's null), then overdue soonest, then due-soon, then future ascending. An invoice you can't date is a problem, not a low priority — the sort ordering says so. Secondary sort by Amount Payable descending is available via `?sort=amount` for materiality-first triage. Each row carries a due-status chip: `no due date`, `overdue by Nd`, `due in Nd`, or a mono day count for future dates.
+Due dates are recovered per row via re-extraction of the source file at page-load time (deterministic adapters return instantly, LLM adapters hit committed cassettes — ~200ms for 20 invoices, all cache hits). No schema change to the runs table.
+2026-07-31
+
+**Decision (straight-through-attribution):** Fixed the mislabel where a clean invoice that auto-approved with no human involvement appeared as `source: clerk` in the Model-vs-human resolved table. `list_runs()` now sets `source_kind` explicitly three-way: `fixture` (human_note starts with "demo fixture"), `clerk` (any real human_outcome or amendment), or `system` (straight-through — no human touch, no amendment). The Settled section on the landing, the Model-vs-human resolved table on Human Review, and the Payments authorizer column all consume the same three-way attribution. A straight-through APPROVE reads as "system · straight-through" everywhere.
+2026-07-31
+
+**Decision (See-the-full-analysis button weight):** The Human Review card's link to the detail page is the primary path from triage into evidence, and it was underplayed as `class="btn btn-primary"` at default size. Upsized: 12px vertical padding, 14px font, 700 weight, an inline arrow glyph, and a subtle blue shadow to lift it off the light card body. The one-line hint below it kept intact.
+2026-07-31
+
+---
