@@ -15,9 +15,11 @@ XAI_API_KEY: str = os.environ.get("XAI_API_KEY", "")
 # model identifier; if this default drifts, prior cassettes go unreachable.
 GROK_MODEL: str = os.environ.get("GROK_MODEL", "grok-4.5")
 # One of: "live" (always call), "replay" (never call; miss is fatal), "auto"
-# (replay on hit, live on miss). Default "auto" so `python main.py ...` works
-# both with and without a fresh API key.
-LLM_MODE: str = os.environ.get("LLM_MODE", "auto")
+# (replay on hit, live on miss). Default "replay" so a cold clone with no
+# .env and no explicit env-var never accidentally spends money — matches
+# the CLI default in main.py (see DECISIONS 2026-07-31 default-cli-mode)
+# and the dashboard's force-replay guard.
+LLM_MODE: str = os.environ.get("LLM_MODE", "replay")
 
 # Pricing — USD per million tokens for grok-4.5. Derived from console billing
 # on 2026-07-29; confirm against xAI's published pricing page before Phase 8.
