@@ -88,8 +88,9 @@ def format_manifest_lines(m: dict[str, Any]) -> list[str]:
     """Human-readable version of the manifest for the CLI header."""
     git_sha = m["git"]["sha"] or "(no git)"
     dirty = " +dirty" if m["git"]["dirty"] else ""
+    model = m['llm']['model'] or "(unset — set GROK_MODEL)"
     return [
-        f"model={m['llm']['model']}  mode={m['llm']['mode']}  "
+        f"model={model}  mode={m['llm']['mode']}  "
         f"cassettes={m['cassettes_on_disk']}  git={git_sha}{dirty}",
         f"threshold=${m['config']['approval_threshold_usd']:,.0f}  "
         f"near-band={m['config']['near_threshold_band']:.0%}  "

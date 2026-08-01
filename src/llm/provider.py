@@ -202,6 +202,18 @@ class LLMProvider:
                     f"fingerprint, for debugging only): {key}"
                 )
 
+        # Pre-flight: `model` must be non-empty by the time we hit the API.
+        # Otherwise xAI returns `Model not found: ''` which reads as a broken
+        # system rather than an incomplete config. This trips only if both
+        # config.py's fallback and .env.example's default have been undone
+        # AND no explicit model= was passed to the constructor.
+        if not self.model:
+            raise LLMError(
+                "GROK_MODEL is unset — cannot make a live call.\n"
+                "Add `GROK_MODEL=grok-4.5` to your .env (or unset the empty "
+                "override so src/config.py's default takes effect)."
+            )
+
         response, latency_ms = _call_with_retry(self._client, request)
         result = self._result_from_response(
             response, latency_ms, response_schema, prompt_name
