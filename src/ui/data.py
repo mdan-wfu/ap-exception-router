@@ -116,8 +116,11 @@ def list_runs() -> list[dict[str, Any]]:
         # by a clerk must NOT be labeled "clerk" anywhere on the surface.
         # See DECISIONS 2026-07-31 straight-through-attribution.
         if d["auto_resolved"]:
-            d["source_kind"] = "fixture"
-            d["source_label"] = "demo fixture"
+            d["source_kind"] = (
+                "queue" if (d["human_note"] or "").strip().lower().startswith("queued for review")
+                else "fixture"
+            )
+            d["source_label"] = _auto_source_label(d["human_note"])
         elif d["human_outcome"] or d["amendment_count"] > 0:
             d["source_kind"] = "clerk"
             d["source_label"] = "clerk"
@@ -140,10 +143,27 @@ def list_runs() -> list[dict[str, Any]]:
 
 
 def _is_auto_resolved(note: str | None) -> bool:
-    """Demo-mode fixture resolutions carry a note starting with 'demo fixture'.
-    A dashboard reviewer must never mistake one of these for a real human
-    decision — see B5 of the Phase 11 dashboard revision."""
-    return bool(note) and note.strip().lower().startswith("demo fixture")
+    """True iff the human_note was written by the system rather than a
+    clerk. Covers two auto-paths that must never be confused with a real
+    human judgment:
+      - "demo fixture ..." — demo mode resolved from data/fixtures/human_gate.json
+      - "queued for review ..." — queue mode's placeholder HOLD, written
+        so the run has a proper audit record while it waits for a clerk
+    See B5 of the Phase 11 dashboard revision, and DECISIONS 2026-08-01
+    queue-mode-placeholder-attribution for why the two paths share an
+    auto flag but keep distinct source labels."""
+    if not note:
+        return False
+    lowered = note.strip().lower()
+    return lowered.startswith("demo fixture") or lowered.startswith("queued for review")
+
+
+def _auto_source_label(note: str | None) -> str:
+    """Which auto-path resolved this run. Only meaningful when
+    _is_auto_resolved(note) is True."""
+    if note and note.strip().lower().startswith("queued for review"):
+        return "queue placeholder · awaiting clerk"
+    return "demo fixture"
 
 
 def _enrich_due_dates(rows: list[dict[str, Any]]) -> None:
@@ -294,6 +314,9 @@ def get_run(invoice_number: str) -> dict[str, Any] | None:
     d["corpus"] = corpus_of(d["source_file"])
     d["nodes_fired"] = json.loads(d["nodes_fired"]) if d["nodes_fired"] else []
     d["auto_resolved"] = _is_auto_resolved(d.get("human_note"))
+    d["auto_source_label"] = (
+        _auto_source_label(d.get("human_note")) if d["auto_resolved"] else None
+    )
     d["amendment_count"] = n_amend
     d["latest_amendment"] = latest["new_outcome"] if latest else None
     d["effective_outcome"] = (

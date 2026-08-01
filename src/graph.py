@@ -148,7 +148,32 @@ def build_graph(checkpointer_path: Path | str | None = "runs/checkpoints.sqlite"
     checkpointer_path.parent.mkdir(parents=True, exist_ok=True)
     import sqlite3
     conn = sqlite3.connect(str(checkpointer_path), check_same_thread=False)
-    return g.compile(checkpointer=SqliteSaver(conn))
+    return g.compile(checkpointer=SqliteSaver(conn, serde=_checkpoint_serde()))
+
+
+def _checkpoint_serde():
+    """Register the schema types LangGraph's msgpack serializer sees in
+    graph state (Invoice, Finding, Decision, etc). Without an explicit
+    allowlist the checkpointer still works but prints a deprecation
+    warning per unregistered type on every checkpoint deserialization —
+    LangGraph 2.x will block those types entirely. Registering here is a
+    one-line-per-type fix that clears the warning today and future-proofs.
+    """
+    from langgraph.checkpoint.serde.jsonplus import JsonPlusSerializer
+    return JsonPlusSerializer(allowed_msgpack_modules=[
+        ("src.schema", "Severity"),
+        ("src.schema", "Outcome"),
+        ("src.schema", "Money"),
+        ("src.schema", "Correction"),
+        ("src.schema", "LineItem"),
+        ("src.schema", "AdditionalCharge"),
+        ("src.schema", "Invoice"),
+        ("src.schema", "Finding"),
+        ("src.schema", "Decision"),
+        ("src.schema", "ModelCall"),
+        ("src.schema", "ToolCall"),
+        ("src.schema", "RunRecord"),
+    ])
 
 
 def run_with_human_resume(graph, initial_or_command, config) -> GraphState:

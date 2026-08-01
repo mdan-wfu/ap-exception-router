@@ -11,7 +11,7 @@
       <span class="chip chip-{{ run.human_outcome|lower }}">human: {{ run.human_outcome }}</span>
     {% endif %}
     {% if auto_resolved %}
-      <span class="chip chip-auto" title="{{ run.human_note }}">auto · demo fixture</span>
+      <span class="chip chip-auto" title="{{ run.human_note }}">auto · {{ run.auto_source_label or "demo fixture" }}</span>
     {% endif %}
     {% if effective_outcome and effective_outcome != run.outcome and effective_outcome != run.human_outcome %}
       <span class="chip chip-amended">amended → {{ effective_outcome }}</span>
