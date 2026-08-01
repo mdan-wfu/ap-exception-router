@@ -5,6 +5,7 @@ __pycache__/
 *.pyc
 *.db
 runs/
-data/uploads/
+data/uploads/*
+!data/uploads/.gitkeep
 scripts/probe_output/
 .DS_Store

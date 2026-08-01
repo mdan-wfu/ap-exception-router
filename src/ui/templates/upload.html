@@ -9,6 +9,13 @@
   </p>
 </div>
 
+{% if err_message %}
+<div class="mb-6 p-3 rounded max-w-2xl mx-auto text-sm"
+     style="background: rgba(239,68,68,.08); border: 1px solid var(--red-dim); color: var(--red);">
+  {{ err_message }}
+</div>
+{% endif %}
+
 <div class="grid grid-cols-3 gap-6">
   <div class="col-span-2 space-y-4">
 
@@ -104,16 +111,52 @@
       {% endif %}
     </div>
 
-    {% if recent_uploads %}
-    <div class="card">
-      <div class="card-header"><h3 class="display text-base">Uploaded files</h3></div>
+    {% if uploads %}
+    <div class="card" x-data="{ showAll: false }">
+      <div class="card-header flex items-baseline gap-3">
+        <h3 class="display text-base">Uploaded files</h3>
+        <span class="text-xs" style="color: var(--ink-mute);">
+          {{ uploads|length }} total · most recent first
+        </span>
+      </div>
       <ul class="p-4 text-sm space-y-2">
         {% for u in recent_uploads %}
-        <li class="flex justify-between">
-          <a class="mono" href="/upload/{{ u.name }}">{{ u.name }}</a>
+        <li class="flex items-center justify-between gap-2">
+          <a class="mono truncate" href="/upload/{{ u.name }}" style="flex: 1;">{{ u.name }}</a>
           <span class="mono text-xs" style="color: var(--ink-mute);">{{ u.size }} B</span>
+          <form method="post" action="/upload/{{ u.name }}/delete" class="m-0"
+                onsubmit="return confirm('Delete {{ u.name }}?');">
+            <button type="submit" class="text-xs"
+                    style="color: var(--red); background: none; border: 0; padding: 2px 6px; cursor: pointer;"
+                    title="remove this upload">remove</button>
+          </form>
         </li>
         {% endfor %}
+        {% if older_uploads %}
+        <template x-if="showAll">
+          <div>
+          {% for u in older_uploads %}
+          <li class="flex items-center justify-between gap-2 pt-2" style="border-top: 1px solid var(--ink-2);">
+            <a class="mono truncate" href="/upload/{{ u.name }}" style="flex: 1;">{{ u.name }}</a>
+            <span class="mono text-xs" style="color: var(--ink-mute);">{{ u.size }} B</span>
+            <form method="post" action="/upload/{{ u.name }}/delete" class="m-0"
+                  onsubmit="return confirm('Delete {{ u.name }}?');">
+              <button type="submit" class="text-xs"
+                      style="color: var(--red); background: none; border: 0; padding: 2px 6px; cursor: pointer;"
+                      title="remove this upload">remove</button>
+            </form>
+          </li>
+          {% endfor %}
+          </div>
+        </template>
+        <li class="pt-3" style="border-top: 1px solid var(--ink-2);">
+          <button type="button" @click="showAll = !showAll"
+                  class="text-xs" style="color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer;">
+            <span x-show="!showAll">show {{ older_uploads|length }} older</span>
+            <span x-show="showAll" x-cloak>hide older</span>
+          </button>
+        </li>
+        {% endif %}
       </ul>
     </div>
     {% else %}

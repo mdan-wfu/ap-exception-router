@@ -28,6 +28,16 @@
     </div>
     <div class="card-body">
       {% if key_configured %}
+        {% if not looks_like_invoice %}
+        <div class="mb-4 p-3 rounded text-sm"
+             style="background: var(--amber-soft); border-left: 4px solid var(--amber); color: var(--ink-dark);">
+          <strong style="color: var(--amber);">This file doesn't look like an invoice.</strong>
+          A quick non-LLM scan found no digits, no currency symbols, and no
+          invoice-number-like tokens. Processing will still cost roughly
+          <span class="mono">$0.01–0.02</span> and may return no usable result.
+          You can proceed if you want to see how the extractor handles it.
+        </div>
+        {% endif %}
         <div class="prose text-sm" style="max-width: none;">
           Clicking <strong style="color: var(--red);">Run live</strong> below will make one real API call
           against your xAI account. Expected cost: <span class="mono">~$0.01–0.10</span>.

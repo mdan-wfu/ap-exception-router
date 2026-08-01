@@ -105,7 +105,7 @@ def test_upload_run_restores_replay_even_when_graph_crashes(client, monkeypatch)
     monkeypatch.setattr(graph_mod, "run_one", crash)
     monkeypatch.setenv("XAI_API_KEY", "xai-fake-for-test")
 
-    r = client.post("/upload", files={"file": ("crash.txt", b"x", "text/plain")},
+    r = client.post("/upload", files={"file": ("crash.txt", b"INVOICE #INV-TEST\nAmount: $10.00\n" * 2, "text/plain")},
                     follow_redirects=False)
     name = r.headers["location"].rsplit("/", 1)[-1]
 
@@ -125,7 +125,7 @@ def test_upload_run_restores_replay_even_when_graph_crashes(client, monkeypatch)
 
 def test_upload_run_requires_confirm(client, monkeypatch):
     monkeypatch.setenv("XAI_API_KEY", "xai-fake-for-test")
-    r = client.post("/upload", files={"file": ("x.txt", b"x", "text/plain")},
+    r = client.post("/upload", files={"file": ("x.txt", b"INVOICE #INV-TEST\nAmount: $10.00\n" * 2, "text/plain")},
                     follow_redirects=False)
     name = r.headers["location"].rsplit("/", 1)[-1]
     r = client.post(f"/upload/{name}/run", data={"confirm": "no"},
@@ -136,7 +136,7 @@ def test_upload_run_requires_confirm(client, monkeypatch):
 
 def test_upload_run_requires_key(client, monkeypatch):
     monkeypatch.delenv("XAI_API_KEY", raising=False)
-    r = client.post("/upload", files={"file": ("x.txt", b"x", "text/plain")},
+    r = client.post("/upload", files={"file": ("x.txt", b"INVOICE #INV-TEST\nAmount: $10.00\n" * 2, "text/plain")},
                     follow_redirects=False)
     name = r.headers["location"].rsplit("/", 1)[-1]
     r = client.post(f"/upload/{name}/run", data={"confirm": "yes"},

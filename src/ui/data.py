@@ -12,6 +12,7 @@ their `source_file` prefix and never blended in aggregate metrics.
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 from dataclasses import dataclass
 from decimal import Decimal
@@ -860,6 +861,75 @@ UPLOAD_DIR = Path("data/uploads")
 def uploads_dir() -> Path:
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
     return UPLOAD_DIR
+
+
+_SUPPORTED_EXTS = {".txt", ".pdf", ".json", ".csv", ".xml"}
+_MIN_UPLOAD_BYTES = 32  # anything smaller cannot plausibly be an invoice
+_INVOICE_HINT_RE = re.compile(
+    r"\d|\$|€|£|¥|invoice\s*(?:#|no|number)|inv[-_ ]?\d", re.IGNORECASE
+)
+
+
+def reject_upload(filename: str, contents: bytes) -> str | None:
+    """Deterministic pre-checks that block obviously-unprocessable files
+    BEFORE they reach the live-run gate. Returns a short error code on
+    reject, or None if the file passes basic sanity. These are facts, not
+    judgments — nothing here decides whether contents 'look like an
+    invoice'. That is the model's job."""
+    from pathlib import PurePath
+    if len(contents) == 0:
+        return "empty"
+    ext = PurePath(filename or "").suffix.lower()
+    if ext not in _SUPPORTED_EXTS:
+        return "unsupported"
+    if len(contents) < _MIN_UPLOAD_BYTES:
+        return "too_small"
+    # For text-ish formats, insist on being decodable. PDFs are binary and
+    # will be probed at extract time; nothing to check here beyond size.
+    if ext != ".pdf":
+        try:
+            contents.decode("utf-8")
+        except UnicodeDecodeError:
+            try:
+                contents.decode("latin-1")
+            except Exception:
+                return "unreadable"
+    return None
+
+
+def remove_upload(name: str) -> bool:
+    """Delete a single uploaded file. Path-traversal safe: strips any
+    directory components and requires the resolved path to live inside
+    uploads_dir. Returns True iff a file was removed."""
+    from pathlib import PurePath
+    safe = PurePath(name).name
+    if not safe or safe == ".gitkeep":
+        return False
+    target = uploads_dir() / safe
+    try:
+        target = target.resolve()
+    except OSError:
+        return False
+    if uploads_dir().resolve() not in target.parents:
+        return False
+    if not target.exists() or not target.is_file():
+        return False
+    target.unlink()
+    return True
+
+
+def looks_like_invoice(preview_text: str) -> bool:
+    """Cheap, non-LLM signal: does the text contain any invoice-shaped
+    tokens (digits, currency symbols, or an invoice-number pattern)?
+
+    Deliberately permissive — a False here is an advisory, not a block.
+    A memo with no numbers, no currency, and no INV- tokens is unlikely
+    to yield a usable extraction; showing that to the user before the
+    live gate saves them ~$0.01–0.02.
+    """
+    if not preview_text or "(cannot preview" in preview_text:
+        return False
+    return _INVOICE_HINT_RE.search(preview_text) is not None
 
 
 def save_upload(filename: str, contents: bytes) -> Path:

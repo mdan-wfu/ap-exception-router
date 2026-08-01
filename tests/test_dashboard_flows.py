@@ -129,8 +129,11 @@ def test_upload_without_key_saves_and_shows_cli_command(client, monkeypatch):
     monkeypatch.delenv("XAI_API_KEY", raising=False)
     monkeypatch.setenv("XAI_API_KEY", "")
     # Upload
-    r = client.post("/upload", files={"file": ("test.txt", b"hello world", "text/plain")},
-                    follow_redirects=False)
+    r = client.post(
+        "/upload",
+        files={"file": ("test.txt", b"INVOICE #INV-9999\nAmount: $123.45\n" * 2, "text/plain")},
+        follow_redirects=False,
+    )
     assert r.status_code == 303
     location = r.headers["location"]
     assert location.startswith("/upload/")
@@ -148,8 +151,11 @@ def test_upload_run_requires_both_confirm_and_key(client, monkeypatch):
     fire a live call. Redirects back with an error param."""
     monkeypatch.delenv("XAI_API_KEY", raising=False)
     # First upload a file
-    r = client.post("/upload", files={"file": ("t.txt", b"x", "text/plain")},
-                    follow_redirects=False)
+    r = client.post(
+        "/upload",
+        files={"file": ("t.txt", b"INVOICE #INV-8888\nAmount: $10.00\n" * 2, "text/plain")},
+        follow_redirects=False,
+    )
     name = r.headers["location"].rsplit("/", 1)[-1]
 
     # No key at all → redirect with nokey error

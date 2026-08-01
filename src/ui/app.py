@@ -215,10 +215,23 @@ def codes_view(request: Request):
 
 @app.get("/upload", response_class=HTMLResponse)
 def upload_form(request: Request):
+    err = request.query_params.get("err")
+    err_message = {
+        "nofile": "No file or pasted text was received.",
+        "empty": "That file is empty. Upload a document with content.",
+        "too_small": "That file is smaller than a plausible invoice (< 32 bytes). Upload the real source.",
+        "unsupported": "Unsupported extension. Accepted: .txt .pdf .json .csv .xml",
+        "unreadable": "That file is not readable as text or PDF. Check the source.",
+    }.get(err or "") if err else None
+    uploads = _list_uploads()
+    recent_limit = 5
     return templates.TemplateResponse(request, "upload.html", {
         "active_nav": "upload",
         "key_configured": data.xai_key_configured(),
-        "recent_uploads": _list_uploads(),
+        "uploads": uploads,
+        "recent_uploads": uploads[:recent_limit],
+        "older_uploads": uploads[recent_limit:],
+        "err_message": err_message,
     })
 
 
@@ -231,12 +244,28 @@ async def upload_receive(
 ):
     if file is not None and file.filename:
         contents = await file.read()
-        dest = data.save_upload(file.filename, contents)
+        filename = file.filename
     elif pasted.strip():
-        dest = data.save_upload(pasted_name, pasted.encode("utf-8"))
+        contents = pasted.encode("utf-8")
+        filename = pasted_name
     else:
         return RedirectResponse(url="/upload?err=nofile", status_code=303)
+
+    reject = data.reject_upload(filename, contents)
+    if reject is not None:
+        return RedirectResponse(url=f"/upload?err={reject}", status_code=303)
+
+    dest = data.save_upload(filename, contents)
     return RedirectResponse(url=f"/upload/{dest.name}", status_code=303)
+
+
+@app.post("/upload/{name}/delete")
+def upload_delete(name: str):
+    """Remove a single uploaded file. Sanitized against path traversal
+    in data.remove_upload; a name not resolving inside uploads_dir is a
+    no-op."""
+    data.remove_upload(name)
+    return RedirectResponse(url="/upload", status_code=303)
 
 
 @app.get("/upload/{name}", response_class=HTMLResponse)
@@ -244,13 +273,15 @@ def upload_detail(request: Request, name: str):
     path = data.uploads_dir() / name
     if not path.exists():
         return HTMLResponse(f"<h1>upload {name!r} not found</h1>", status_code=404)
+    preview = _preview_bytes(path)
     return templates.TemplateResponse(request, "upload_detail.html", {
         "active_nav": "upload",
         "filename": name,
         "path": str(path),
         "size": path.stat().st_size,
-        "preview": _preview_bytes(path),
+        "preview": preview,
         "key_configured": data.xai_key_configured(),
+        "looks_like_invoice": data.looks_like_invoice(preview),
     })
 
 
@@ -320,11 +351,15 @@ def upload_run(name: str, confirm: str = Form("")):
 
 
 def _list_uploads() -> list[dict]:
+    """Uploads sorted most-recent-first by mtime. Skips .gitkeep (present
+    so `data/uploads/` survives a clone)."""
     d = data.uploads_dir()
-    return sorted(
-        [{"name": p.name, "size": p.stat().st_size} for p in d.iterdir() if p.is_file()],
-        key=lambda x: x["name"],
-    )
+    entries = [
+        {"name": p.name, "size": p.stat().st_size, "mtime": p.stat().st_mtime}
+        for p in d.iterdir() if p.is_file() and p.name != ".gitkeep"
+    ]
+    entries.sort(key=lambda x: x["mtime"], reverse=True)
+    return entries
 
 
 def _preview_bytes(path: Path, limit: int = 4000) -> str:
