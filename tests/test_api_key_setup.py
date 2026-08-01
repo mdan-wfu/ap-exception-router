@@ -181,6 +181,37 @@ def test_save_updates_process_env_so_next_request_sees_it(isolated, monkeypatch)
     assert os.environ["XAI_API_KEY"] == FAKE_KEY
 
 
+def test_provider_built_after_save_uses_new_key(isolated):
+    """LLMProvider() constructed AFTER save_api_key_to_env must use the
+    saved key — not the empty string frozen in src.config at import time.
+
+    Regression guard: the bug was that provider.py did
+    `from src.config import XAI_API_KEY` (a string snapshot) and then
+    `self.api_key = api_key or XAI_API_KEY` in __init__. save_api_key_to_env
+    correctly updated os.environ but the frozen constant stayed "". Any
+    upload_run live call therefore used "replay-mode-placeholder".
+
+    No live API call — we inspect provider.api_key and _client.api_key
+    directly. The OpenAI client is never called here."""
+    import os
+    assert not os.environ.get("XAI_API_KEY"), "pre-condition: no key in env"
+
+    ok, _ = save_api_key_to_env(FAKE_KEY)
+    assert ok
+
+    from src.llm.provider import LLMProvider
+    from src.llm.cassette import CassetteStore
+    # Construct exactly as upload_run does (no api_key= kwarg)
+    provider = LLMProvider(mode="auto", cassette_store=CassetteStore())
+
+    assert provider.api_key == FAKE_KEY, (
+        f"Provider used stale key {provider.api_key!r} — __init__ must read "
+        "os.environ['XAI_API_KEY'] at construction time, not the frozen config constant."
+    )
+    # The underlying OpenAI client was also built with the real key
+    assert provider._client.api_key == FAKE_KEY
+
+
 # ---------------------------------------------------------------------------
 # HTTP flow — routes, redirects, template rendering
 # ---------------------------------------------------------------------------

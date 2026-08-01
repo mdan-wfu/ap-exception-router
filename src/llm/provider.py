@@ -18,6 +18,7 @@ wrong values.
 from __future__ import annotations
 
 import json
+import os
 import time
 from datetime import datetime, timezone
 from typing import Any, TYPE_CHECKING
@@ -141,10 +142,16 @@ class LLMProvider:
         timeout: float = DEFAULT_TIMEOUT,
         max_tokens: int = DEFAULT_MAX_TOKENS,
     ) -> None:
-        self.api_key = api_key or XAI_API_KEY
+        # Read env fresh at construction time. The module-level constants
+        # (XAI_API_KEY, GROK_MODEL, LLM_MODE) are frozen at import; a key
+        # written post-startup via the dashboard form updates os.environ but
+        # not those names. Reading os.environ here means any LLMProvider
+        # constructed after the write (including upload_run's live pair) sees
+        # the new values without a process restart.
+        self.api_key = api_key or os.environ.get("XAI_API_KEY", "")
         self.base_url = base_url
-        self.model = model or GROK_MODEL
-        self.mode = mode or LLM_MODE
+        self.model = model or os.environ.get("GROK_MODEL") or "grok-4.5"
+        self.mode = mode or os.environ.get("LLM_MODE") or "replay"
         self.cassette_store = cassette_store
         self.timeout = timeout
         self.max_tokens = max_tokens
