@@ -29,6 +29,8 @@ make eval         # the scoring harness
 make report       # corpus stats: cost, straight-through rate, exception mix
 ```
 
+`make dashboard` is where the system is actually usable — start there after the demo.
+
 To run an invoice the system has never seen, see [Testing with your own invoices](#testing-with-your-own-invoices).
 
 ---
@@ -131,6 +133,44 @@ Scored against ground truth derived from the generator's own source literals, no
 A separately-scored [authored adversarial set](docs/eval-results.md#authored-adversarial-set-phase-10) of four invoices targets the three finding codes the provided corpus never exercises. Kept in its own corpus with its own ground truth, never blended into the numbers above.
 
 Full analysis, named misses, and business extrapolation: [`docs/eval-results.md`](docs/eval-results.md).
+
+---
+
+## Using the dashboard
+
+`make dashboard`, then open `http://127.0.0.1:8000`. No API key needed to browse the results.
+
+**The queue** is the landing page — every invoice the system processed, escalations first, sorted by due date. A green chip means the system approved it automatically; amber means a human needs to decide.
+
+**Click any invoice** for the full analysis: the original document beside what was extracted, the findings the validators raised, the Adjudicator's reasoning, the Critic's challenge against it, and every tool call it made while investigating. **Start with INV-1012** — the vendor-rename investigation is the clearest example of the system reasoning rather than pattern-matching. It discovers that QuickShip is absent from the vendor master, finds FastShip Ltd. named as a claimed predecessor, learns FastShip is inactive with zero payment history, and escalates on that chain.
+
+**INV-1004** shows the duplicate-diff view: two files under one invoice number with different totals, and why the system can't pick one.
+
+**Human Review** (`/queue`) is the work queue. Each escalated invoice arrives with the evidence already assembled and a plain-English note from the Scribe. Approve, reject, or hold — held items land in their own tab and stay actionable.
+
+**Payments** shows every disbursement with a running total. Amend an approval after payment and the row stays on the ledger, flagged for reversal — the system can't un-call a payment and says so.
+
+**`/codes`** explains every finding code in plain English with severity meanings.
+
+---
+
+### Processing your own invoice
+
+1. `make dashboard` → **Add Invoice** tab
+2. Paste your xAI key into the API key panel — stored in the local gitignored `.env`, never committed, never appears in a URL
+3. Upload a file (.txt, .pdf, .json, .csv, .xml); confirm the cost estimate; click **Run live**
+4. The invoice appears in the queue like any other
+
+If the file doesn't look like an invoice (no currency amounts, no invoice number, no line items), the system says so and withholds the Run button rather than burning a call on something it can't use. There's an explicit "Run anyway" option if you want to test the edge case deliberately.
+
+Without a key, the setup panel walks you through adding one. With no key, the rest of the dashboard — the queue, the detail pages, the payments ledger — still works fully in replay mode.
+
+For terminal users the CLI path works the same way:
+
+```bash
+cp .env.example .env   # add XAI_API_KEY=xai-...
+.venv/bin/python main.py --invoice_path=/path/to/invoice.txt --live
+```
 
 ---
 

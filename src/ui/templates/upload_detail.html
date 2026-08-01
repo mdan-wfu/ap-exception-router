@@ -28,16 +28,8 @@
     </div>
     <div class="card-body">
       {% if key_configured %}
-        {% if not looks_like_invoice %}
-        <div class="mb-4 p-3 rounded text-sm"
-             style="background: var(--amber-soft); border-left: 4px solid var(--amber); color: var(--ink-dark);">
-          <strong style="color: var(--amber);">This file doesn't look like an invoice.</strong>
-          A quick non-LLM scan found no digits, no currency symbols, and no
-          invoice-number-like tokens. Processing will still cost roughly
-          <span class="mono">$0.01–0.02</span> and may return no usable result.
-          You can proceed if you want to see how the extractor handles it.
-        </div>
-        {% endif %}
+        {% if looks_like_invoice %}
+        {# Normal path — file has invoice-shaped content #}
         <div class="prose text-sm" style="max-width: none;">
           Clicking <strong style="color: var(--red);">Run live</strong> below will make one real API call
           against your xAI account. Expected cost: <span class="mono">~$0.01–0.10</span>.
@@ -55,6 +47,37 @@
           <input type="hidden" name="confirm" value="yes">
           <button class="btn btn-danger" type="submit">Run live — I authorize this call</button>
         </form>
+        {% else %}
+        {# Gate: no invoice-shaped content found — block the default path #}
+        <div class="p-4 rounded text-sm"
+             style="background: var(--amber-soft); border-left: 4px solid var(--amber); color: var(--ink-dark);">
+          <strong style="color: var(--amber);">This file doesn't look like an invoice.</strong>
+          <p class="mt-2">
+            We couldn't find a currency amount, an invoice number, or line items in it.
+            Processing it would cost money and produce no usable result, so we haven't offered to run it.
+            If you believe this is an invoice, check the file contents or try a different format.
+          </p>
+        </div>
+        <div class="mt-6">
+          <details>
+            <summary class="text-xs cursor-pointer" style="color: var(--ink-mute);">Run anyway</summary>
+            <div class="mt-3 p-4 rounded text-sm" style="background: var(--paper-alt); border: 1px solid var(--border);">
+              <p class="mb-3" style="color: var(--ink-mid);">
+                This will make a real API call and is likely to produce no usable result.
+                The run record will appear in the failed-runs section of the queue.
+              </p>
+              <form method="post" action="/upload/{{ filename }}/run"
+                    onsubmit="return confirm('Run anyway — this file doesn\'t look like an invoice. The call will cost ~$0.01–0.10 and is likely to produce no result. Continue?');">
+                <input type="hidden" name="confirm" value="yes">
+                <button class="btn" type="submit"
+                        style="color: var(--amber); border-color: var(--amber); background: transparent;">
+                  Run anyway (~$0.01–0.10, likely to produce no result)
+                </button>
+              </form>
+            </div>
+          </details>
+        </div>
+        {% endif %}
       {% else %}
         <div class="text-xs uppercase tracking-widest mb-2" style="color: var(--amber);">✕ XAI_API_KEY not set</div>
         <div class="prose text-sm mb-4" style="max-width: none;">

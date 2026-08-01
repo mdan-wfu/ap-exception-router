@@ -50,17 +50,18 @@ def test_real_invoice_shape_still_detected():
         assert looks_like_invoice(txt), f"should read as invoice-shaped: {txt!r}"
 
 
-def test_upload_detail_page_shows_advisory_for_prose(tmp_path, monkeypatch):
-    """End-to-end: upload a prose file, verify the /upload/{name}
-    detail page renders the yellow advisory banner."""
-    # Isolate audit + uploads
+def test_upload_detail_page_gates_run_live_for_prose(tmp_path, monkeypatch):
+    """End-to-end: upload a prose file, verify that:
+    - The detail page shows the 'doesn't look like an invoice' gate message
+    - The normal Run-live button is absent (would burn a call with no result)
+    - The 'Run anyway' escape hatch is present for deliberate edge-case testing
+    """
     from src import config as cfg
     from src.store import audit as audit_mod
     from src.ui import data as ui_data
     cfg.AUDIT_DB_PATH = tmp_path / "audit.sqlite"
     audit_mod.AUDIT_DB_PATH = cfg.AUDIT_DB_PATH
     ui_data.UPLOAD_DIR = tmp_path / "uploads"
-    # Real key so the detail page shows the Run-live surface (with advisory).
     monkeypatch.setenv("XAI_API_KEY", "xai-FAKE0000000000TESTKEY99")
 
     from src.ui.app import app
@@ -77,7 +78,41 @@ def test_upload_detail_page_shows_advisory_for_prose(tmp_path, monkeypatch):
 
     detail = client.get(f"/upload/{name}").text
     assert "doesn't look like an invoice" in detail, (
-        "prose file must trigger the advisory; found no advisory banner"
+        "prose file must show the gate message"
+    )
+    assert "Run live — I authorize this call" not in detail, (
+        "normal Run-live button must be absent for non-invoice files"
+    )
+    assert "Run anyway" in detail, (
+        "escape hatch must be present for reviewers testing edge cases"
+    )
+
+
+def test_upload_detail_page_offers_run_live_for_real_invoice(tmp_path, monkeypatch):
+    """A file with invoice-shaped content must show the normal Run-live button,
+    not the gate message."""
+    from src import config as cfg
+    from src.store import audit as audit_mod
+    from src.ui import data as ui_data
+    cfg.AUDIT_DB_PATH = tmp_path / "audit.sqlite"
+    audit_mod.AUDIT_DB_PATH = cfg.AUDIT_DB_PATH
+    ui_data.UPLOAD_DIR = tmp_path / "uploads"
+    monkeypatch.setenv("XAI_API_KEY", "xai-FAKE0000000000TESTKEY99")
+
+    from src.ui.app import app
+    client = TestClient(app)
+
+    invoice = b"INVOICE #INV-9999\nVendor: Acme Corp\nTotal: $1,250.00\nDue: 2026-08-15"
+    r = client.post("/upload", files={"file": ("invoice.txt", invoice, "text/plain")},
+                    follow_redirects=False)
+    name = r.headers["location"].rsplit("/", 1)[-1]
+
+    detail = client.get(f"/upload/{name}").text
+    assert "Run live — I authorize this call" in detail, (
+        "real invoice must show the normal Run-live button"
+    )
+    assert "doesn't look like an invoice" not in detail, (
+        "real invoice must not show the gate message"
     )
 
 
