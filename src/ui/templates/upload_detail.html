@@ -64,14 +64,14 @@
 echo 'XAI_API_KEY=xai-YOUR-KEY-HERE' &gt;&gt; .env
 
 # 2. Run this exact invoice live
-python main.py --invoice_path {{ path }} --live
+.venv/bin/python main.py --invoice_path {{ path }} --live
 # → ~$0.01–0.10, cassette written to data/cassettes/</pre>
         <div class="text-xs mt-4" style="color: var(--ink-mute);">
           After the run, this invoice appears in <a href="/">the queue</a> like any other. Copy this file's path with the button below.
         </div>
         <div class="mt-3">
           <button class="btn" type="button"
-                  onclick="navigator.clipboard.writeText('python main.py --invoice_path {{ path }} --live'); this.textContent='copied';">
+                  onclick="navigator.clipboard.writeText('.venv/bin/python main.py --invoice_path {{ path }} --live'); this.textContent='copied';">
             copy CLI command
           </button>
         </div>

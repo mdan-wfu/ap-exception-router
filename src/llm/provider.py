@@ -189,7 +189,7 @@ class LLMProvider:
                     "To process a new invoice you must:\n"
                     "  1. Put a valid xAI key in .env: XAI_API_KEY=xai-...\n"
                     "  2. Re-run with `--live`  (e.g. "
-                    "`python main.py --invoice_path <PATH> --live`)\n"
+                    "`.venv/bin/python main.py --invoice_path <PATH> --live`)\n"
                     "\n"
                     "This makes real API calls against your xAI account "
                     "and incurs cost (typically $0.01–0.10 per invoice, "
