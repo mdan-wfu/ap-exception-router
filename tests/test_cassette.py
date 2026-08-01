@@ -139,7 +139,7 @@ def test_cassette_filename_is_the_key(tmp_path: Path) -> None:
 
 def test_put_rejects_credential_in_response(tmp_path: Path) -> None:
     store = CassetteStore(root=tmp_path)
-    leaky_result = _fake_result("here is my key: xai-J7jSzIKorBop9ZxJNwH0Pv")
+    leaky_result = _fake_result("here is my key: xai-EXAMPLE0000000000FAKEKEY")
     with pytest.raises(RedactionError):
         store.put(_base_request(), leaky_result)
 
@@ -147,7 +147,7 @@ def test_put_rejects_credential_in_response(tmp_path: Path) -> None:
 def test_put_rejects_credential_in_request_messages(tmp_path: Path) -> None:
     store = CassetteStore(root=tmp_path)
     req = _base_request()
-    req["messages"][1]["content"] = "leaked: xai-J7jSzIKorBop9ZxJNwH0Pv"
+    req["messages"][1]["content"] = "leaked: xai-EXAMPLE0000000000FAKEKEY"
     with pytest.raises(RedactionError):
         store.put(req, _fake_result())
 
@@ -167,6 +167,6 @@ def test_committed_cassettes_contain_no_credentials() -> None:
 
 def test_key_pattern_matches_real_shape() -> None:
     """Sanity: the regex actually matches the .env key shape."""
-    assert _KEY_PATTERN.search("prefix xai-J7jSzIKorBop9ZxJNwH0Pv suffix")
+    assert _KEY_PATTERN.search("prefix xai-EXAMPLE0000000000FAKEKEY suffix")
     assert not _KEY_PATTERN.search("this is just prose without credentials")
     assert not _KEY_PATTERN.search("xai-shrt")  # too short
