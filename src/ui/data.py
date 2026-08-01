@@ -906,10 +906,11 @@ def finding_code_legend() -> list[dict[str, Any]]:
     doesn't return anything the tool doesn't; this is a READ over the
     taxonomy doc, not a write, so it cannot invalidate cassettes.
 
-    Returns one entry per code with prefix, domain, code, trigger,
-    rationale, and a short one-line summary derived from the trigger."""
-    from src.tools.policy_tool import _parse_taxonomy
+    Returns one entry per code with prefix, domain, code, severity,
+    trigger, and rationale."""
+    from src.tools.policy_tool import _parse_severities, _parse_taxonomy
     entries = _parse_taxonomy()
+    severities = _parse_severities()
     domains = {
         "EX": "extraction", "AR": "arithmetic", "IN": "inventory",
         "PR": "pricing", "VN": "vendor", "TM": "terms",
@@ -922,6 +923,7 @@ def finding_code_legend() -> list[dict[str, Any]]:
             "code": code,
             "prefix": code.split("-")[0],
             "domain": domains.get(code.split("-")[0], ""),
+            "severity": severities.get(code, ""),
             "trigger": row.get("trigger", ""),
             "rationale": row.get("rationale", ""),
         })

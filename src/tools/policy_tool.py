@@ -50,6 +50,32 @@ def _parse_taxonomy() -> dict[str, dict[str, str | list[str]]]:
     return entries
 
 
+@lru_cache(maxsize=1)
+def _parse_severities() -> dict[str, str]:
+    """Return {code: severity} parsed from the same taxonomy table rows.
+
+    Separate from _parse_taxonomy so severity does not enter the frozen
+    extraction surface (tests/test_taxonomy_frozen.py). Severity is not
+    returned by get_policy by design — see the module docstring.
+
+    Also captures rows with a merged or malformed rationale cell that
+    _parse_taxonomy skips (AR-003, AR-004, VN-003), because severity
+    still lives in column 0 for those rows.
+    """
+    if not TAXONOMY_PATH.exists():
+        return {}
+    out: dict[str, str] = {}
+    for line in TAXONOMY_PATH.read_text().splitlines():
+        m = _ROW_RE.match(line)
+        if not m:
+            continue
+        parts = [p.strip() for p in m.group(2).split("|")]
+        if not parts:
+            continue
+        out[m.group(1)] = parts[0]
+    return out
+
+
 def get_policy(query: PolicyQuery) -> PolicyResult:
     entries = _parse_taxonomy()
     row = entries.get(query.finding_code.strip())

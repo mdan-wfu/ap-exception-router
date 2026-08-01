@@ -10,21 +10,51 @@
   </p>
 </div>
 
+<div class="panel mb-6">
+  <div class="panel-header"><h3 class="display text-base">What each severity means for the decision</h3></div>
+  <div class="panel-body">
+    <dl class="grid md:grid-cols-2 gap-x-6 gap-y-3 text-sm">
+      <div class="flex items-baseline gap-3">
+        <span class="chip chip-critical">CRITICAL</span>
+        <span style="color: var(--text-mid);">Cannot be paid under any reading. The §2.2 guardrail forbids auto-approve — the system overrides an APPROVE to ESCALATE.</span>
+      </div>
+      <div class="flex items-baseline gap-3">
+        <span class="chip chip-high">HIGH</span>
+        <span style="color: var(--text-mid);">Substantive defect. Requires human judgment.</span>
+      </div>
+      <div class="flex items-baseline gap-3">
+        <span class="chip chip-medium">MEDIUM</span>
+        <span style="color: var(--text-mid);">Anomaly worth surfacing to the Adjudicator.</span>
+      </div>
+      <div class="flex items-baseline gap-3">
+        <span class="chip chip-low">LOW / INFO</span>
+        <span style="color: var(--text-mid);">Noted for the record; rarely decision-relevant on its own.</span>
+      </div>
+    </dl>
+    <div class="text-xs mt-4" style="color: var(--text-dim);">Guidance, not a mechanical rule. Verbatim from <span class="mono">docs/exception-taxonomy.md</span>.</div>
+  </div>
+</div>
+
 <div class="panel">
   <table class="data">
     <thead><tr>
       <th>Code</th>
       <th>Domain</th>
-      <th>Plain English</th>
-      <th>Trigger</th>
+      <th>Severity</th>
+      <th>When it fires</th>
+      <th>Why it matters</th>
     </tr></thead>
     <tbody>
       {% for c in codes %}
       <tr>
         <td class="mono">{{ c.code }}</td>
         <td style="color: var(--text-mute);">{{ c.domain }}</td>
-        <td>{{ summaries.get(c.code, "") }}</td>
-        <td class="text-xs" style="color: var(--text-mute);">{{ c.trigger }}</td>
+        <td>
+          {% set sev = c.severity.split('/')[0].strip()|lower %}
+          <span class="chip chip-{{ 'low' if sev == 'info' else sev }}">{{ c.severity }}</span>
+        </td>
+        <td class="text-sm">{{ c.trigger }}</td>
+        <td class="text-sm" style="color: var(--text-mute);">{{ c.rationale }}</td>
       </tr>
       {% endfor %}
     </tbody>
@@ -32,10 +62,9 @@
 </div>
 
 <div class="mt-6 text-xs" style="color: var(--text-dim);">
-  Two codes exist in the taxonomy but are not shown above because their table rows
+  Three codes exist in the taxonomy but are not shown above because their table rows
   don't parse into <span class="mono">get_policy</span>'s extraction surface: <span class="mono">AR-003</span>
-  (documented but not implemented — see <span class="mono">docs/eval-results.md</span>) and
-  <span class="mono">AR-004</span> (row contains a pipe in its rationale cell; also a known
-  parser limitation).
+  (documented but not implemented — see <span class="mono">docs/eval-results.md</span>),
+  <span class="mono">AR-004</span>, and <span class="mono">VN-003</span> (rationale column merged into an adjacent cell — a known parser limitation).
 </div>
 {% endblock %}

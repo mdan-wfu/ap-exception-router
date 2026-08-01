@@ -206,7 +206,6 @@ def codes_view(request: Request):
     return templates.TemplateResponse(request, "codes.html", {
         "active_nav": "codes",
         "codes": data.finding_code_legend(),
-        "summaries": data.FINDING_SUMMARIES,
     })
 
 

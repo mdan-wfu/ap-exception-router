@@ -23,9 +23,27 @@
   <h1 class="display display-bold text-4xl mt-3">{{ run.invoice_number }}</h1>
   <p class="text-sm mt-1" style="color: var(--ink-mute);">
     {{ run.vendor_name or "(no vendor name extracted)" }} · ${{ "{:,.2f}".format(run.stated_total_usd or 0) }} {{ run.currency or "USD" }} · {{ run.source_format }} adapter
-    {% if run.invoice_number == "INV-1004" %} · <a href="/duplicate/INV-1004">see duplicate diff →</a>{% endif %}
   </p>
 </div>
+
+{% set has_dp002 = findings|selectattr('code', 'equalto', 'DP-002')|list|length > 0 %}
+{% if has_dp002 %}
+<div class="mb-6 p-4 rounded"
+     style="background: rgba(239,68,68,.08); border: 1px solid var(--red-dim); border-left: 4px solid var(--red);">
+  <div class="flex items-center gap-4 flex-wrap">
+    <div class="flex-1" style="min-width: 20ch;">
+      <div class="flex items-baseline gap-2">
+        <span class="chip chip-critical">DP-002</span>
+        <span class="display text-base">Two submissions under this invoice number, differing content.</span>
+      </div>
+      <div class="text-sm mt-1" style="color: var(--ink-mid);">
+        The system cannot resolve this deterministically. The diff view shows both submissions side by side; a human must confirm which (if either) to pay.
+      </div>
+    </div>
+    <a href="/duplicate/{{ run.invoice_number }}" class="btn btn-primary" style="display: inline-block; text-decoration: none;">See the duplicate diff →</a>
+  </div>
+</div>
+{% endif %}
 
 <!-- Reason callout — hold / amendment context, above the fold -->
 {% if reason_callout %}
