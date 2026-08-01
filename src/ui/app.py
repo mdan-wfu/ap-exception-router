@@ -219,12 +219,19 @@ def codes_view(request: Request):
 @app.get("/upload", response_class=HTMLResponse)
 def upload_form(request: Request):
     err = request.query_params.get("err")
+    err_file = request.query_params.get("file")
     err_message = {
         "nofile": "No file or pasted text was received.",
         "empty": "That file is empty. Upload a document with content.",
         "too_small": "That file is smaller than a plausible invoice (< 32 bytes). Upload the real source.",
         "unsupported": "Unsupported extension. Accepted: .txt .pdf .json .csv .xml",
         "unreadable": "That file is not readable as text or PDF. Check the source.",
+        "no_invoice_number": (
+            f"Processing completed for {err_file or 'the uploaded file'} but "
+            "extraction produced no invoice number — the file likely did not "
+            "contain readable invoice structure. Check the failed-runs section "
+            "on the queue for details, or upload a different file."
+        ),
     }.get(err or "") if err else None
     uploads = _list_uploads()
     recent_limit = 5
@@ -347,12 +354,29 @@ def upload_run(name: str, confirm: str = Form("")):
     if state.get("terminal_status") == Outcome.FAILED:
         return RedirectResponse(url=f"/invoice/{path.name}", status_code=303)
 
-    # Redirect to the invoice detail — the audit store now has a row.
+    # Non-FAILED — the graph ran end-to-end. Redirect to the invoice
+    # detail if we have a usable invoice_number. `re_extract` re-parses
+    # the source cheaply (deterministic adapters return instantly,
+    # LLM adapters hit the fresh cassette we just wrote).
     ext, _ = data.re_extract(str(path))
-    if ext is not None:
-        return RedirectResponse(url=f"/invoice/{ext.invoice.invoice_number}",
-                                status_code=303)
-    return RedirectResponse(url="/", status_code=303)
+    inv_number = (
+        ext.invoice.invoice_number
+        if ext is not None and ext.invoice is not None
+        else ""
+    )
+    if inv_number:
+        return RedirectResponse(url=f"/invoice/{inv_number}", status_code=303)
+
+    # Extraction returned no usable invoice_number (e.g. the model
+    # produced an empty ExtractedInvoice from a prose file). The audit
+    # row exists but is keyed on the empty string — /invoice/ would
+    # 404 with FastAPI's default JSON body. Send the user back to the
+    # upload page with a banner so they land on an explanation, not a
+    # raw 404. They paid for the call; they must see what happened.
+    return RedirectResponse(
+        url=f"/upload?err=no_invoice_number&file={path.name}",
+        status_code=303,
+    )
 
 
 def _list_uploads() -> list[dict]:

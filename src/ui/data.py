@@ -944,8 +944,17 @@ def uploads_dir() -> Path:
 
 _SUPPORTED_EXTS = {".txt", ".pdf", ".json", ".csv", ".xml"}
 _MIN_UPLOAD_BYTES = 32  # anything smaller cannot plausibly be an invoice
-_INVOICE_HINT_RE = re.compile(
-    r"\d|\$|€|£|¥|invoice\s*(?:#|no|number)|inv[-_ ]?\d", re.IGNORECASE
+# Advisory heuristic. Prior version accepted any lone digit, which meant a
+# prose review with "94.2 percent" or a stray date suppressed the advisory
+# on a genuinely non-invoice file. Now: require at least one of the three
+# invoice-shaped signals (currency next to a digit, an invoice-number-like
+# token, or a quantity×price pattern). Still advisory — a match promises
+# nothing about correctness, a miss only means "no obvious invoice shape".
+_INVOICE_HINT_RES: tuple = (
+    re.compile(r"[$€£¥]\s*[\d,]"),                              # $500, € 1,000
+    re.compile(r"\binv(?:oice)?\W{0,10}\d", re.IGNORECASE),     # INV-1234, Inv #: 1002
+    re.compile(r"\binvoice\s*(?:no\.?|number)\b", re.IGNORECASE),  # invoice no / number
+    re.compile(r"\d+\s*[x×@]\s*\$?\d"),                         # 5 x $250, 5 × 250, 5 @ 250
 )
 
 
@@ -998,17 +1007,19 @@ def remove_upload(name: str) -> bool:
 
 
 def looks_like_invoice(preview_text: str) -> bool:
-    """Cheap, non-LLM signal: does the text contain any invoice-shaped
-    tokens (digits, currency symbols, or an invoice-number pattern)?
+    """Cheap, non-LLM signal: does the text contain something
+    invoice-shaped (currency next to a digit, an invoice-number-like
+    token, or a quantity×price pattern)?
 
-    Deliberately permissive — a False here is an advisory, not a block.
-    A memo with no numbers, no currency, and no INV- tokens is unlikely
-    to yield a usable extraction; showing that to the user before the
-    live gate saves them ~$0.01–0.02.
+    Deliberately permissive on the true side, deliberately strict on
+    what counts as "shaped". A prose review with "94.2 percent" or a
+    date used to pass because any digit was enough — a memo now
+    correctly reads as False so the advisory fires. A miss is an
+    advisory, not a block; the user can still proceed.
     """
     if not preview_text or "(cannot preview" in preview_text:
         return False
-    return _INVOICE_HINT_RE.search(preview_text) is not None
+    return any(r.search(preview_text) for r in _INVOICE_HINT_RES)
 
 
 def save_upload(filename: str, contents: bytes) -> Path:

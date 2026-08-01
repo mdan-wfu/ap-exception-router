@@ -52,12 +52,29 @@ def test_accept_supported_pdf_skips_text_decode():
 # looks_like_invoice — non-LLM structure heuristic (advisory only)
 # ---------------------------------------------------------------------------
 
-def test_looks_like_invoice_true_for_digits():
-    assert data.looks_like_invoice("Amount 100")
+def test_looks_like_invoice_true_for_currency_and_digit():
+    # The old heuristic accepted a lone digit or a lone currency symbol —
+    # too broad, prose with "94.2%" satisfied it. The tightened heuristic
+    # requires currency adjacent to a digit, an invoice-number-like token,
+    # or a quantity×price pattern.
+    assert data.looks_like_invoice("Total: $500.00")
+    assert data.looks_like_invoice("Total: € 1,000")
 
 
-def test_looks_like_invoice_true_for_currency():
-    assert data.looks_like_invoice("Total: $USD")
+def test_looks_like_invoice_false_for_currency_symbol_alone():
+    # `$USD` (no digit adjacent) is not invoice-shaped by itself.
+    assert data.looks_like_invoice("Total: $USD") is False
+
+
+def test_looks_like_invoice_false_for_bare_digits():
+    # A lone integer isn't enough — prose has plenty ("3 issues", "Q3 2026").
+    assert data.looks_like_invoice("Amount 100") is False
+
+
+def test_looks_like_invoice_true_for_quantity_price_pattern():
+    assert data.looks_like_invoice("Line: WidgetA 5 @ $250")
+    assert data.looks_like_invoice("5 x 250")
+    assert data.looks_like_invoice("5 × 250")
 
 
 def test_looks_like_invoice_true_for_invoice_number_token():
