@@ -68,6 +68,19 @@ def print_single_result(source_path: str, state: dict[str, Any]) -> None:
     console.print()
     console.print(Panel.fit(header, border_style="cyan"))
 
+    # A FAILED terminal_status means run_one caught an exception before
+    # producing a decision — extraction blew up, or a live call was
+    # denied. The failure_reason on state carries the actionable text
+    # (auth error, model-not-found, malformed source). Surface it here
+    # so the CLI reads as a real error rather than an eerily empty run.
+    failure = state.get("failure_reason")
+    outcome_str = getattr(outcome, "value", outcome) if outcome else None
+    if outcome_str == "FAILED" or failure:
+        console.print(Panel(
+            failure or "(no reason recorded)",
+            title="Run failed", border_style="red",
+        ))
+
     if findings:
         _print_findings_table(findings)
 

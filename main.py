@@ -89,6 +89,10 @@ def main() -> None:
         elapsed = time.perf_counter() - started
         print_single_result(args.invoice_path, state)
         _emit_jsonl(manifest, [_record_from_state(args.invoice_path, state, elapsed)])
+        # Exit non-zero on FAILED so shell scripts and CI catch the failure.
+        outcome_val = getattr(state.get("terminal_status"), "value", state.get("terminal_status"))
+        if outcome_val == "FAILED":
+            raise SystemExit(3)
         return
 
     # -- batch --
