@@ -239,14 +239,20 @@ def run_corpus(corpus_dir: Path | None = None) -> dict[str, dict]:
     from src.graph_state import GraphState
     from src.validators import find_duplicates, select_batch_retentions
 
-    # Reset audit + checkpoint DBs so replay is deterministic (same reason as
-    # `make demo`). If we don't, resumed threads from a prior run will change
-    # tool results and produce cassette misses.
-    import subprocess
-    subprocess.run(["make", "audit-reset"], check=True, capture_output=True, cwd=str(REPO_ROOT))
-    ck = REPO_ROOT / "runs" / "checkpoints.sqlite"
-    if ck.exists():
-        ck.unlink()
+    # Route this eval to its OWN audit + checkpoint files. Sharing
+    # runs/audit.sqlite with `make demo` meant a reviewer following the
+    # README verbatim (demo → eval → report) saw the report contradict
+    # the demo output — eval had silently replaced the store's contents.
+    # Isolation here means: report + dashboard + demo-digest all keep
+    # showing the demo state after `make eval` runs. See DECISIONS
+    # 2026-08-01 eval-audit-isolation.
+    from src import config as _cfg
+    eval_audit = REPO_ROOT / "runs" / "audit-eval.sqlite"
+    eval_ckpt = REPO_ROOT / "runs" / "checkpoints-eval.sqlite"
+    _cfg.AUDIT_DB_PATH = eval_audit
+    for p in (eval_audit, eval_ckpt):
+        if p.exists():
+            p.unlink()
 
     corpus = corpus_dir or DEFAULT_CORPUS
     paths = sorted(
@@ -263,7 +269,7 @@ def run_corpus(corpus_dir: Path | None = None) -> dict[str, dict]:
     # Same retained-file selection as main.py — see DECISIONS 2026-07-31.
     retained_source_files = select_batch_retentions(invoices)
 
-    graph = build_graph()
+    graph = build_graph(checkpointer_path=eval_ckpt)
     states: dict[str, dict] = {}
     for path, extraction in extractions:
         if extraction.invoice.source_file not in retained_source_files:
