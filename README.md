@@ -10,6 +10,8 @@ Built for the Galatiq case study. Grok 4.5 + LangGraph + Python.
 
 ## Quickstart
 
+**Prerequisites:** Python 3.11+ (`python3 --version`) and `make`. No API key required for the demo path — cassettes replay the corpus offline.
+
 ```bash
 git clone https://github.com/mdan-wfu/ap-exception-router.git
 cd ap-exception-router

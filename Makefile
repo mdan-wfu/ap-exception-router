@@ -1,7 +1,16 @@
 .PHONY: install seed audit-reset probe demo demo-adversarial demo-digest demo-digest-check test report eval eval-adversarial dashboard
 
+# Explicit `python3` — macOS ships no bare `python`, and a reviewer's
+# first action failing on that would derail everything else. Version
+# check runs BEFORE `python3 -m venv` so the error names the actual
+# requirement (Python 3.11+) rather than dying downstream on a syntax
+# error from a language feature the older interpreter doesn't have.
 install:
-	python -m venv .venv
+	@python3 -c 'import sys; assert sys.version_info >= (3, 11), \
+	    f"Python 3.11+ required (found {sys.version_info.major}.{sys.version_info.minor}). " \
+	    "Install a newer interpreter or set PATH so `python3` resolves to it."' \
+	    || (echo "" && echo "ap-exception-router needs Python 3.11 or newer." && exit 1)
+	python3 -m venv .venv
 	.venv/bin/pip install -r requirements.txt
 
 seed:
