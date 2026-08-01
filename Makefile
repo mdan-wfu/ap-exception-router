@@ -1,16 +1,31 @@
 .PHONY: install seed audit-reset probe demo demo-adversarial demo-digest demo-digest-check test report eval eval-adversarial dashboard
 
-# Explicit `python3` — macOS ships no bare `python`, and a reviewer's
-# first action failing on that would derail everything else. Version
-# check runs BEFORE `python3 -m venv` so the error names the actual
-# requirement (Python 3.11+) rather than dying downstream on a syntax
-# error from a language feature the older interpreter doesn't have.
+# macOS commonly has both system python3 (3.9) and Homebrew python3.11+
+# installed, with `python3` resolving to the older one. Try the
+# version-suffixed names first so the reviewer's install works without
+# them having to know which interpreter is which. Fall back to bare
+# `python3` last (with a version check) and error clearly if nothing
+# meets 3.11.
 install:
-	@python3 -c 'import sys; assert sys.version_info >= (3, 11), \
-	    f"Python 3.11+ required (found {sys.version_info.major}.{sys.version_info.minor}). " \
-	    "Install a newer interpreter or set PATH so `python3` resolves to it."' \
-	    || (echo "" && echo "ap-exception-router needs Python 3.11 or newer." && exit 1)
-	python3 -m venv .venv
+	@python_bin=""; \
+	for cand in python3.13 python3.12 python3.11 python3; do \
+	  command -v "$$cand" > /dev/null 2>&1 || continue; \
+	  ver=$$("$$cand" -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")' 2>/dev/null); \
+	  case "$$ver" in \
+	    3.1[1-9]|3.[2-9][0-9]|[4-9].*) python_bin="$$cand"; break ;; \
+	  esac; \
+	done; \
+	if [ -z "$$python_bin" ]; then \
+	  echo ""; \
+	  echo "ap-exception-router needs Python 3.11 or newer."; \
+	  echo "Tried python3.13, python3.12, python3.11, python3 — none were found or all were too old."; \
+	  echo ""; \
+	  echo "On macOS: brew install python@3.11 && python3.11 -m venv .venv && .venv/bin/pip install -r requirements.txt"; \
+	  echo "Otherwise install a suitable interpreter and rerun \`make install\`."; \
+	  exit 1; \
+	fi; \
+	echo "using $$python_bin ($$($$python_bin --version 2>&1))"; \
+	"$$python_bin" -m venv .venv
 	.venv/bin/pip install -r requirements.txt
 
 seed:

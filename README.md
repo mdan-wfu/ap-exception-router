@@ -178,7 +178,7 @@ The provided corpus replays offline. I made it this way so that whoever reviews 
 If you run it without a key first, you'll get an explanation rather than a failure — replay is the default, and live is explicit opt-in:
 
 ```bash
-python main.py --invoice_path=/path/to/your/invoice.txt
+.venv/bin/python main.py --invoice_path=/path/to/your/invoice.txt
 # → explains why there's no recording and what to do about it
 ```
 
@@ -187,7 +187,7 @@ To actually process it:
 ```bash
 cp .env.example .env
 # add your key: XAI_API_KEY=xai-...
-python main.py --invoice_path=/path/to/your/invoice.txt --live
+.venv/bin/python main.py --invoice_path=/path/to/your/invoice.txt --live
 ```
 
 Typically $0.01–0.10 depending on whether it escalates, capped by a per-invoice circuit breaker. Fresh cassettes are recorded so subsequent replays of that same invoice are free.
