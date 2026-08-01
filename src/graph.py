@@ -26,6 +26,7 @@ from pathlib import Path
 
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import END, START, StateGraph
+from langgraph.types import Command
 
 from src.config import APPROVAL_THRESHOLD_USD, MAX_CRITIC_ROUNDS
 from src.graph_state import GraphState
@@ -136,13 +137,66 @@ def build_graph(checkpointer_path: Path | str | None = "runs/checkpoints.sqlite"
     g.add_edge("route_outcome", END)
 
     if checkpointer_path is None:
-        return g.compile()
+        # `interrupt()` and `Command(resume=...)` require a checkpointer.
+        # For test paths that do not want persistence, fall back to an
+        # in-memory saver rather than compiling without one — otherwise
+        # any test invoice that reaches human_gate blows up at resume.
+        from langgraph.checkpoint.memory import MemorySaver
+        return g.compile(checkpointer=MemorySaver())
 
     checkpointer_path = Path(checkpointer_path)
     checkpointer_path.parent.mkdir(parents=True, exist_ok=True)
     import sqlite3
     conn = sqlite3.connect(str(checkpointer_path), check_same_thread=False)
     return g.compile(checkpointer=SqliteSaver(conn))
+
+
+def run_with_human_resume(graph, initial_or_command, config) -> GraphState:
+    """Drive `graph.invoke` through any number of human-gate interrupts.
+
+    The graph pauses at `human_gate` via LangGraph's `interrupt()`. This
+    helper resolves the pause according to `HUMAN_GATE_MODE` and resumes
+    with `Command(resume=...)`. Loops until the graph reaches END.
+
+    Modes:
+      - "demo"        → resolve from data/fixtures/human_gate.json.
+                        Non-interactive; `make demo` never hangs.
+      - "interactive" → prompt on stdin; block until the clerk answers.
+      - "queue"       → default the resume to HOLD so the run completes
+                        with `human_queued=True`, gets a proper audit
+                        record, and remains actionable through the
+                        dashboard's post-completion override path.
+                        A truly "leave-paused-forever" mode would strand
+                        the run outside the audit store; deferring that
+                        variant until there is a concrete need for it.
+    """
+    from src.human_gate_runner import resolve_interrupt
+
+    result = graph.invoke(initial_or_command, config=config)
+    while True:
+        packet = _pending_human_gate_interrupt(result)
+        if packet is None:
+            return result
+        answer = resolve_interrupt(packet)
+        result = graph.invoke(Command(resume=answer), config=config)
+
+
+def _pending_human_gate_interrupt(result) -> dict | None:
+    """Extract the interrupt payload from a graph result, or None if the
+    graph finished. LangGraph 1.x exposes interrupts under the
+    `__interrupt__` key on the returned state (as a tuple of Interrupt
+    objects). Older builds expose them via graph.get_state(config).tasks;
+    the __interrupt__ shape is the newer, more direct one.
+    """
+    if not isinstance(result, dict):
+        return None
+    interrupts = result.get("__interrupt__")
+    if not interrupts:
+        return None
+    first = interrupts[0]
+    # Interrupt objects have `.value`; plain dicts wouldn't but we tolerate both.
+    value = getattr(first, "value", first)
+    return value if isinstance(value, dict) else None
 
 
 def run_one(source_path: str, graph=None, thread_id: str | None = None) -> GraphState:
@@ -160,7 +214,7 @@ def run_one(source_path: str, graph=None, thread_id: str | None = None) -> Graph
         "human_queued": False,
     }
     try:
-        return graph.invoke(initial, config=config)
+        return run_with_human_resume(graph, initial, config)
     except _NON_FAILURE_EXCEPTIONS:
         # CircuitBreakerTripped / CacheMissError still surface to the caller
         # unwrapped — they are already handled specifically (CLI prints a

@@ -508,17 +508,17 @@ def _safe_source_text(source_file: str) -> str:
 def record_human_decision(
     invoice_number: str, human_outcome: str, human_note: str
 ) -> None:
-    """Update the run's human_outcome + human_note. Never overwrites the
-    model's decision (that stays in `outcome`), per Phase 6 policy.
+    """Apply a clerk decision. Preferred path: resume the paused graph
+    via `Command(resume=...)` so `settle` runs inside the graph exactly
+    as it did during the model's own path. Fallback: for completed runs
+    (the default when `HUMAN_GATE_MODE=demo` runs `make demo` end-to-end
+    and leaves no paused state), invoke the settle node directly via
+    `_invoke_settlement`. Both paths honor the settle node's
+    `prior_paid_settlement` idempotency guard — a run cannot double-pay
+    regardless of which path resolved it.
 
-    Also invokes settlement when the human decides APPROVE or REJECT — the
-    bug this fixes: dashboard actions previously wrote the decision to the
-    audit store but never triggered `mock_payment` / rejection settlement,
-    so human-approved invoices never appeared in the Payments ledger. See
-    DECISIONS 2026-07-31 dashboard-settlement-fix for why this is a direct
-    settle-invocation rather than a LangGraph checkpoint resume (graph
-    doesn't actually use interrupt() — human_gate returns synchronously
-    in every mode — so completed runs have no paused state to resume)."""
+    Never overwrites the model's decision (that stays in `outcome`);
+    the human's outcome is layered on top per §2.3."""
     with _conn() as c:
         c.execute("""
             UPDATE runs SET human_outcome = ?, human_note = ?
@@ -528,10 +528,64 @@ def record_human_decision(
             )
         """, (human_outcome, human_note, invoice_number))
         c.commit()
-    # Settle only for terminal decisions. HOLD leaves the run resumable —
-    # no settlement, item lands on /held for later action.
+
+    # Prefer the resume path when the graph is genuinely paused at
+    # human_gate. Falls silently through to _invoke_settlement when
+    # there is nothing to resume — the common case in demo mode.
+    if _try_resume_paused_run(invoice_number, human_outcome, human_note):
+        return
+
+    # HOLD leaves the run resumable — no settlement, item lands on /held.
     if human_outcome in ("APPROVE", "REJECT"):
         _invoke_settlement(invoice_number, human_outcome, human_note)
+
+
+def _try_resume_paused_run(
+    invoice_number: str, human_outcome: str, human_note: str
+) -> bool:
+    """If a graph is paused at `human_gate` for this invoice's thread,
+    resume it with the clerk's answer and return True. Otherwise
+    return False; the caller falls back to `_invoke_settlement`.
+
+    Thread ID at run time is `str(source_file)` (see `run_one`). The
+    checkpointer is `runs/checkpoints.sqlite` by default. Constructing
+    the graph on every dashboard action is cheap — build_graph opens a
+    single sqlite handle and compiles a StateGraph in a few ms."""
+    run = get_run(invoice_number)
+    if run is None:
+        return False
+    thread_id = run["source_file"]
+    try:
+        from langgraph.types import Command
+        from src.graph import build_graph, _pending_human_gate_interrupt
+        graph = build_graph()
+        config = {"configurable": {"thread_id": thread_id}}
+        state = graph.get_state(config)
+        # A paused run has non-empty .tasks with interrupts on the first task.
+        if not state.tasks:
+            return False
+        interrupts = getattr(state.tasks[0], "interrupts", ()) or ()
+        if not interrupts:
+            return False
+        # Resume with a "dashboard" source so the nodes_fired tag records
+        # who resolved the escalation.
+        answer = {
+            "outcome": human_outcome,
+            "note": human_note or "clerk decision (dashboard)",
+            "source": "dashboard",
+        }
+        result = graph.invoke(Command(resume=answer), config=config)
+        # If the resumed run pauses again (interactive rejects the answer,
+        # for instance), fall back to settlement so the state is not left
+        # dangling. In practice HOLD/APPROVE/REJECT always route to END.
+        if _pending_human_gate_interrupt(result) is not None:
+            return False
+        return True
+    except Exception as exc:
+        # Never let a resume attempt break a dashboard action. Log for the
+        # operator; fall back to _invoke_settlement.
+        print(f"[dashboard] resume attempt for {invoice_number} failed: {exc}")
+        return False
 
 
 def _invoke_settlement(

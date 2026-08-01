@@ -141,7 +141,8 @@ def main() -> None:
         config = {"configurable": {"thread_id": str(path)}}
         started = time.perf_counter()
         try:
-            state = g.invoke(initial, config=config)
+            from src.graph import run_with_human_resume
+            state = run_with_human_resume(g, initial, config)
         except CircuitBreakerTripped as exc:
             elapsed = time.perf_counter() - started
             console.print(

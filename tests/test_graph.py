@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from src.graph import build_graph
+from src.graph import build_graph, run_with_human_resume
 from src.graph_state import GraphState
 from src.schema import Finding, Outcome, Severity
 from src.validators import find_duplicates
@@ -38,7 +38,12 @@ def _invoke(graph, source_path, seeded=None):
         "critic_rounds": 0,
         "tool_result_cache": {},
     }
-    return graph.invoke(initial)
+    # Drive through any human-gate suspension via the same runner run_one
+    # and the batch loop use. Fake-provider tests pass a unique thread_id
+    # per invocation so the checkpointer never collides across tests.
+    import uuid
+    config = {"configurable": {"thread_id": f"{source_path}::{uuid.uuid4().hex}"}}
+    return run_with_human_resume(graph, initial, config)
 
 
 # ---------------------------------------------------------------------------
