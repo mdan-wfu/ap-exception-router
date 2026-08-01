@@ -872,3 +872,16 @@ Rounding to 2dp on `cost_usd` in the projection is deliberate — token-count no
 2026-08-01
 
 ---
+
+**Decision (non-invoice-file routing — gated, not fixed):** Three attempts to make prose files route cleanly through the pipeline failed to fully resolve the problem. The decision is to gate the path rather than continue fixing it. This is a scope call under time pressure, not an oversight.
+
+**Attempt A — re-key all routes on a stable `run_id`.** Routes that currently key on `invoice_number` (`/invoice/{invoice_number}`, `/queue/{invoice_number}`, the amendment and settlement tables) would instead use `runs.id`, which is always present and never model-derived. This closes the class completely. Abandoned: `decision_amendments` and `settlements` both key on `invoice_number` for business-level idempotency — `settlements` uses it to guard against double-payment on the same logical invoice, and `decision_amendments` uses it so the full decision chain is queryable by invoice, not by DB row. Migrating both tables to `run_id` is a multi-table schema change with correctness implications for the idempotency guard; the blast radius is too large relative to the frequency of the problem.
+
+**Attempt B — classify empty `invoice_number` as FAILED at `route_outcome`, add `dismissed_at`, add styled 404 handler.** If extraction produces `invoice_number=""`, `route_outcome` now overrides `terminal_status` to FAILED so the record lands in the failed-runs section instead of the worklist. A `dismissed_at` column lets users soft-delete those records from the queue. All four inline `HTMLResponse(..., 404)` calls were replaced with `raise HTTPException(404)` and a `@app.exception_handler` renders a styled page. Remaining gap: the gate only catches `invoice_number=""`. When the model processes a non-invoice file, it may hallucinate a non-empty invoice number from incidental text — those records have a non-empty `invoice_number`, pass the check, and still land in the worklist as ESCALATE. The fix caught the structural case (genuinely empty) but not the hallucination case (plausible-looking but meaningless).
+
+**Attempt C — hard-gate the Run-live button on `looks_like_invoice()`.** Upload succeeds for any supported file; the Run-live button is suppressed when the heuristic returns False and replaced with a clear explanation. A "Run anyway" escape hatch behind `<details>` + JS confirm dialog preserves the ability to probe the system deliberately. This makes the problem hard to reach accidentally — it requires two deliberate actions to get there. But it doesn't fix the underlying routing: a reviewer who clicks "Run anyway" on a genuinely non-invoice file can still produce a record that ends up in the wrong place.
+
+**Why stop here:** The correct fix (attempt A) is a multi-table migration that touches the idempotency guard on payments. Attempt B and C together make the problem rare and visible rather than silent and frequent. A record that requires two deliberate confirmation steps to create, then lands in a section the user clearly labeled as a dead-end in the gate warning, is qualitatively different from one that appeared by accident. The README documents this honestly under "What I cut, and why."
+2026-08-01
+
+---

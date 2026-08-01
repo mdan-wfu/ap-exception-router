@@ -256,6 +256,7 @@ Nothing else in the dashboard can make an API call — page renders are forced t
 - **Cross-invoice threshold-structuring detection.** INV-1008 and INV-1012 both sit just under $10,000; two authored adversarial invoices from the same vendor three days apart do the same. Each fires `PO-002` individually; nothing recognizes the pair.
 - **`AR-003` (tax-rate mismatch) is documented but not implemented.** Phase 4 declined it — inferring a tax rate in order to flag it manufactures findings, and `AR-004` catches the sum. Authoring an invoice specifically to trip it was how the gap got proven by observation rather than assumed.
 - **A zero-findings fast path.** A clean invoice still costs ~$0.012 for the Adjudicator to conclude nothing is wrong. Short-circuiting those deterministically would make them nearly free.
+- **Non-invoice files that are deliberately forced through.** The upload flow detects when a file has no invoice structure and declines to process it, explaining why. A "Run anyway" escape hatch exists behind a confirmation for anyone probing the system's limits — and if used on a file with no extractable invoice number, the resulting record lands in the review queue rather than the failed-runs section, where its actions dead-end on a 404 page. The gate makes this hard to reach accidentally; the underlying cause is that routes key on the extracted invoice number, which is model output and can be empty. Keying on a stable run id is the correct fix and is where I'd start next.
 
 ---
 
