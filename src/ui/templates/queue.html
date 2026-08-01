@@ -122,6 +122,46 @@
   {% endif %}
 </section>
 
+{% if failed %}
+<!-- Failed to process — invoices that crashed during extraction or a node.
+     Surfaced above the settled block because a failure means the system
+     forgot nothing happened. -->
+<section class="card mb-10" style="border-color: #9ca3af;">
+  <div class="card-header flex items-baseline gap-3" style="background: #f3f4f6;">
+    <h3 class="display text-base">Failed to process</h3>
+    <span class="text-xs" style="color: var(--ink-dim);">{{ failed|length }}</span>
+    <span class="ml-auto text-xs" style="color: var(--ink-mute);">crashes recorded from the pipeline — the invoice never reached a decision</span>
+  </div>
+  <table class="data">
+    <thead>
+      <tr>
+        <th>Source</th>
+        <th>Reason</th>
+        <th>Recorded</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in failed %}
+      <tr>
+        <td class="mono text-xs">
+          <a href="/invoice/{{ r.invoice_number }}">{{ r.invoice_number }}</a>
+          <div class="text-xs mt-1" style="color: var(--ink-dim);">{{ r.source_format or "?" }}</div>
+        </td>
+        <td class="text-xs" style="color: var(--ink-mid); max-width: 60ch;">
+          {{ r.failure_reason or "(no reason recorded)" }}
+        </td>
+        <td class="text-xs" style="color: var(--ink-mute);">
+          <span class="chip chip-failed">FAILED</span>
+        </td>
+        <td class="text-right"><a href="/invoice/{{ r.invoice_number }}" class="text-xs">See record →</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
 <!-- Settled (collapsed by default) -->
 <section x-data="{ open: false, corpus: 'ALL' }" class="card mb-10">
   <div class="card-header flex items-baseline gap-3 cursor-pointer" @click="open = !open">

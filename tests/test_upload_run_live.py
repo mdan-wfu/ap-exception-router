@@ -96,7 +96,12 @@ def test_upload_run_installs_a_provider_with_non_replay_mode(client, monkeypatch
 
 def test_upload_run_restores_replay_even_when_graph_crashes(client, monkeypatch):
     """Airtight restoration: a crash inside run_one must still leave the
-    dashboard singleton at mode='replay' for the next request."""
+    dashboard singleton at mode='replay' for the next request. run_one
+    now catches its own exceptions and persists them as FAILED audit
+    rows (see tests/test_failed_run_persistence.py), so we simulate a
+    hard-crash path by patching run_one itself to raise — which
+    propagates through upload_run's finally clause. The invariant
+    under test is provider restoration, not the HTTP status."""
     from src.llm import agent_loop
     from src import graph as graph_mod
 
@@ -109,9 +114,9 @@ def test_upload_run_restores_replay_even_when_graph_crashes(client, monkeypatch)
                     follow_redirects=False)
     name = r.headers["location"].rsplit("/", 1)[-1]
 
-    r = client.post(f"/upload/{name}/run", data={"confirm": "yes"},
+    with pytest.raises(RuntimeError, match="simulated failure"):
+        client.post(f"/upload/{name}/run", data={"confirm": "yes"},
                     follow_redirects=False)
-    assert r.status_code == 500  # the crash surfaced
 
     final = agent_loop.get_provider()
     assert final.mode == "replay", (

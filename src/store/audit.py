@@ -252,6 +252,52 @@ class AuditStore:
             conn.commit()
             return run_id
 
+    def record_failed_run(self, *, source_file: str, invoice_number: str,
+                          source_format: str | None, error_type: str,
+                          error_message: str, node: str | None) -> int:
+        """Persist a FAILED run when the pipeline crashed before producing an
+        Invoice or a Decision (typically inside triage/extraction). The row
+        has no findings, no model_calls, no tool_calls attached — those live
+        on the child tables, which required a run_id we didn't have when the
+        exception propagated. Everything a reviewer needs to understand what
+        happened lives on the runs row itself: source_file, terminal_status
+        FAILED, failure_reason (type + message), and nodes_fired = [node]."""
+        with self._conn() as conn:
+            reason = f"{error_type}: {error_message}"
+            nodes_fired = json.dumps([node] if node else [])
+            cursor = conn.execute(
+                "INSERT INTO runs "
+                "(invoice_number, vendor_name, source_file, source_format, "
+                " stated_total_usd, currency, semantic_hash, outcome, rationale, "
+                " critic_challenge, revision_occurred, guardrail_override_fired, "
+                " guardrail_override_reason, scribe_note, nodes_fired, started_at, "
+                " finished_at, terminal_status, failure_reason, human_outcome, human_note) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    invoice_number,
+                    None,                       # vendor_name
+                    source_file,
+                    source_format,
+                    None,                       # stated_total_usd
+                    None,                       # currency
+                    None,                       # semantic_hash
+                    "FAILED",                   # outcome
+                    None,                       # rationale
+                    None,                       # critic_challenge
+                    0, 0,                       # revision_occurred, guardrail_override_fired
+                    None,                       # guardrail_override_reason
+                    None,                       # scribe_note
+                    nodes_fired,
+                    None,                       # started_at
+                    datetime.now(timezone.utc).isoformat(),
+                    "FAILED",                   # terminal_status
+                    reason,                     # failure_reason
+                    None, None,                 # human_outcome, human_note
+                ),
+            )
+            conn.commit()
+            return cursor.lastrowid
+
     def record_settlement(self, *, run_id: int | None, invoice_number: str,
                           vendor_name: str, settlement_type: str,
                           amount_usd: Decimal | None, mock_payment_ref: str | None,

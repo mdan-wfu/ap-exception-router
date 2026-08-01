@@ -65,13 +65,16 @@ def queue_view(request: Request, sort: str = "due_date"):
     all_runs = data.list_runs()
     worklist = [r for r in all_runs if r["is_awaiting"] or r["is_held"]]
     settled = [r for r in all_runs if r["is_resolved"]]
+    failed = [r for r in all_runs if r["is_failed"]]
     # Urgency sort for the worklist; alphabetical for the settled section.
     worklist.sort(key=lambda r: data.queue_sort_key(r, mode=sort))
     settled.sort(key=lambda r: r["invoice_number"])
+    failed.sort(key=lambda r: r["invoice_number"])
     return templates.TemplateResponse(request, "queue.html", {
         "active_nav": "queue",
         "worklist": worklist,
         "settled": settled,
+        "failed": failed,
         "sort": sort,
         "progress": data.queue_progress(all_runs),
         "provided": data.corpus_summary("provided"),
@@ -327,20 +330,22 @@ def upload_run(name: str, confirm: str = Form("")):
     live_text = LLMProvider(mode="auto", cassette_store=CassetteStore())
     set_agent_provider(live_agent)
     set_text_provider(live_text)
+    from src.schema import Outcome
     try:
         from src.graph import run_one
-        run_one(str(path))
-    except Exception as exc:
-        return HTMLResponse(
-            f"<h1>run failed</h1><pre>{type(exc).__name__}: {exc}</pre>"
-            f"<p><a href='/upload/{name}'>← back</a></p>",
-            status_code=500,
-        )
+        state = run_one(str(path))
     finally:
-        # Airtight restoration: even if the response construction blows up,
+        # Airtight restoration: even if the run raised or returned FAILED,
         # both singletons return to replay before the next request lands.
         set_agent_provider(saved_agent)
         set_text_provider(saved_text)
+
+    # A FAILED terminal_status means run_one caught an exception and wrote
+    # a FAILED audit row keyed on the upload's basename. Send the user to
+    # that record — they see the failure reason surfaced next to a normal
+    # invoice detail page, not a bare 500.
+    if state.get("terminal_status") == Outcome.FAILED:
+        return RedirectResponse(url=f"/invoice/{path.name}", status_code=303)
 
     # Redirect to the invoice detail — the audit store now has a row.
     ext, _ = data.re_extract(str(path))

@@ -45,6 +45,34 @@
 </div>
 {% endif %}
 
+<!-- Failure callout — the pipeline crashed before producing a decision -->
+{% if run.outcome == "FAILED" %}
+<div class="mb-6 p-4 rounded"
+     style="background: #f3f4f6; border: 1px solid #9ca3af; border-left: 4px solid #4b5563;">
+  <div class="flex items-baseline gap-3">
+    <span class="chip chip-failed">FAILED</span>
+    <span class="display text-base">This upload never reached a decision.</span>
+  </div>
+  <div class="prose text-sm mt-2" style="color: var(--ink-dark); max-width: 68ch;">
+    The pipeline raised an exception before producing an Invoice or a
+    Decision. The system recorded the failure so it doesn't get lost;
+    there is no auto-approve or auto-reject here — a human decides what
+    to do with the file, off-platform. Common causes: extraction couldn't
+    make sense of the source (memo, résumé, corrupted PDF), or a
+    downstream node hit an unexpected shape.
+  </div>
+  <div class="mt-3">
+    <div class="text-xs uppercase tracking-wider" style="color: var(--ink-mute);">reason</div>
+    <div class="mono text-xs mt-1 p-2 rounded" style="background: var(--paper-alt); border: 1px solid var(--ink-2); color: var(--ink-dark); white-space: pre-wrap;">{{ run.failure_reason or "(none recorded)" }}</div>
+  </div>
+  {% if run.nodes_fired %}
+  <div class="mt-2 text-xs" style="color: var(--ink-mute);">
+    node executing at crash: <span class="mono">{{ run.nodes_fired[-1] }}</span>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
 <!-- Reason callout — hold / amendment context, above the fold -->
 {% if reason_callout %}
 <div class="mb-6 p-4 rounded"

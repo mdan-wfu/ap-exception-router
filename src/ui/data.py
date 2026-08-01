@@ -60,6 +60,7 @@ def list_runs() -> list[dict[str, Any]]:
             SELECT r.id, r.invoice_number, r.vendor_name, r.source_file,
                    r.source_format, r.stated_total_usd, r.currency, r.outcome,
                    r.human_outcome, r.human_note, r.rationale, r.scribe_note,
+                   r.terminal_status, r.failure_reason,
                    (SELECT COUNT(*) FROM findings f WHERE f.run_id = r.id) AS n_findings,
                    (SELECT COALESCE(SUM(cost_usd), 0) FROM model_calls m
                     WHERE m.run_id = r.id) AS cost_usd,
@@ -99,6 +100,7 @@ def list_runs() -> list[dict[str, Any]]:
             d["latest_amendment"] or d["human_outcome"] or d["outcome"]
         )
         # Membership shortcuts for view filters.
+        d["is_failed"] = d["outcome"] == "FAILED"
         d["is_resolved"] = d["effective_outcome"] in ("APPROVE", "REJECT")
         d["is_held"] = d["effective_outcome"] == "HOLD"
         d["is_awaiting"] = (
