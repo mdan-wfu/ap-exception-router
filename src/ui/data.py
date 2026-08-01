@@ -1057,6 +1057,128 @@ def xai_key_configured() -> bool:
 
 
 # ---------------------------------------------------------------------------
+# In-dashboard API-key setup (B8b)
+#
+# The reviewer's whole path is keyless until she wants to process her own
+# invoice. Instead of dropping her into a terminal editor to touch .env,
+# we accept the key inside the dashboard. The key never appears in a URL,
+# never gets logged, never enters the audit DB, never appears in template
+# context beyond the masked confirmation. All persistence is to the
+# already-gitignored local .env.
+# ---------------------------------------------------------------------------
+
+_ENV_FILE = Path(".env")
+_ENV_EXAMPLE = Path(".env.example")
+# xAI keys are `xai-` followed by 20+ base64ish chars. Empty prefix
+# accepted only for the placeholder we swap in for replay mode.
+_XAI_KEY_SHAPE = re.compile(r"^xai-[A-Za-z0-9_\-]{20,}$")
+
+
+def validate_api_key_shape(candidate: str) -> str | None:
+    """Return None if the candidate looks like a real xAI key, else a
+    short human-readable reason. Purely structural — does not call the
+    API. A shape-valid string is not proven-real; a shape-invalid string
+    is proven-fake."""
+    if not candidate or not candidate.strip():
+        return "Key is empty."
+    candidate = candidate.strip()
+    if not candidate.startswith("xai-"):
+        return "xAI keys start with `xai-`. Copy the whole key from console.x.ai."
+    if len(candidate) < 24:
+        return "Key is too short. Copy the whole key from console.x.ai."
+    if not _XAI_KEY_SHAPE.match(candidate):
+        return "Key contains characters that don't look like an xAI key. Recopy from console.x.ai."
+    return None
+
+
+def mask_api_key(key: str) -> str:
+    """`xai-...LAST4` for any confirmation display. Never renders the
+    full key. Empty / non-xAI inputs return an obviously-unset marker."""
+    if not key or not key.startswith("xai-"):
+        return "(unset)"
+    if len(key) <= 8:
+        return "xai-…"
+    return f"xai-…{key[-4:]}"
+
+
+def masked_configured_key() -> str | None:
+    """Masked form of the currently-configured key, or None if unset."""
+    import os
+    key = os.environ.get("XAI_API_KEY", "")
+    if not xai_key_configured():
+        return None
+    return mask_api_key(key)
+
+
+def save_api_key_to_env(candidate: str) -> tuple[bool, str]:
+    """Persist an xAI key to the local .env (creating from .env.example
+    if absent). Returns (ok, message_for_user). The message contains
+    only the masked form of the key on success — never the full string.
+
+    Atomicity: writes to `.env.tmp` then os.replace, so a crash mid-write
+    can't leave a half-written .env. Also updates os.environ so the
+    running dashboard picks up the key without a restart.
+
+    Silently skips any request that isn't shape-valid — the caller
+    should validate first via validate_api_key_shape."""
+    reason = validate_api_key_shape(candidate)
+    if reason is not None:
+        return False, reason
+
+    candidate = candidate.strip()
+
+    # Read the base contents — existing .env if present, else .env.example.
+    # Missing both is a first-run situation; we start from a minimal template.
+    if _ENV_FILE.exists():
+        base = _ENV_FILE.read_text()
+    elif _ENV_EXAMPLE.exists():
+        base = _ENV_EXAMPLE.read_text()
+    else:
+        base = "XAI_API_KEY=\nGROK_MODEL=grok-4.5\nLLM_MODE=replay\n"
+
+    # Rewrite the XAI_API_KEY line in place; append if absent.
+    new_lines = []
+    replaced = False
+    for line in base.splitlines():
+        # Match the literal assignment `XAI_API_KEY=` at line start
+        # (allowing an optional export prefix and surrounding whitespace).
+        stripped = line.lstrip()
+        if (
+            stripped.startswith("XAI_API_KEY=")
+            or stripped.startswith("export XAI_API_KEY=")
+        ):
+            new_lines.append(f"XAI_API_KEY={candidate}")
+            replaced = True
+        else:
+            new_lines.append(line)
+    if not replaced:
+        new_lines.append(f"XAI_API_KEY={candidate}")
+
+    contents = "\n".join(new_lines)
+    if not contents.endswith("\n"):
+        contents += "\n"
+
+    tmp = _ENV_FILE.with_suffix(".env.tmp") if _ENV_FILE.suffix else Path(str(_ENV_FILE) + ".tmp")
+    tmp.write_text(contents)
+    # Restrict permissions so a shared machine doesn't gift the key
+    # to other users. Best-effort: os.chmod isn't a Windows guarantee.
+    try:
+        import os as _os
+        _os.chmod(tmp, 0o600)
+    except OSError:
+        pass
+    import os as _os
+    _os.replace(tmp, _ENV_FILE)
+
+    # Load the new key into THIS process so the very next request that
+    # hits provider construction sees it. python-dotenv's `load_dotenv`
+    # would not override existing values; we set it explicitly.
+    _os.environ["XAI_API_KEY"] = candidate
+
+    return True, f"Key saved locally ({mask_api_key(candidate)})."
+
+
+# ---------------------------------------------------------------------------
 # Code legend (B4) — parse the plain-English meanings from taxonomy prose
 # ---------------------------------------------------------------------------
 

@@ -220,6 +220,10 @@ def codes_view(request: Request):
 def upload_form(request: Request):
     err = request.query_params.get("err")
     err_file = request.query_params.get("file")
+    # The key-saved flash is a "did the write succeed" flag only. The
+    # masked form of the key is recomputed here from the current env,
+    # not passed via query string — no key material ever appears in a URL.
+    key_saved = request.query_params.get("key_saved") == "1"
     err_message = {
         "nofile": "No file or pasted text was received.",
         "empty": "That file is empty. Upload a document with content.",
@@ -238,11 +242,41 @@ def upload_form(request: Request):
     return templates.TemplateResponse(request, "upload.html", {
         "active_nav": "upload",
         "key_configured": data.xai_key_configured(),
+        "masked_key": data.masked_configured_key(),
+        "key_saved": key_saved,
+        "key_setup_error": request.query_params.get("key_err"),
+        # `replace` query param lets a configured user re-open the setup form
+        "show_setup_form": (
+            request.query_params.get("replace") == "1"
+            or not data.xai_key_configured()
+        ),
         "uploads": uploads,
         "recent_uploads": uploads[:recent_limit],
         "older_uploads": uploads[recent_limit:],
         "err_message": err_message,
     })
+
+
+@app.post("/upload/api-key")
+def upload_api_key(api_key: str = Form(...)):
+    """Persist an xAI API key to the local .env. POST only; the key is
+    read from a form field (never a URL), validated for shape, written
+    to the gitignored .env, and immediately loaded into the current
+    process env. The redirect target carries only a `key_saved=1` flag —
+    no key material appears anywhere in the response body, headers,
+    audit store, or server logs. Redirect uses 303 so a browser refresh
+    of the destination doesn't re-POST."""
+    ok, message = data.save_api_key_to_env(api_key)
+    if ok:
+        # Only a boolean flag in the URL. The masked form is computed
+        # by the /upload GET handler from the (now-updated) env.
+        return RedirectResponse(url="/upload?key_saved=1", status_code=303)
+    # Error path: pass a short opaque code in the URL so the GET handler
+    # can render the message. Never include the submitted key.
+    from urllib.parse import quote
+    return RedirectResponse(
+        url=f"/upload?key_err={quote(message)}", status_code=303,
+    )
 
 
 @app.post("/upload")

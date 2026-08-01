@@ -175,7 +175,9 @@ A second near-miss, where a fix was itself wrong and got caught by a determinism
 
 The provided corpus replays offline. I made it this way so that whoever reviews the build can see its behavior right away, without needing to bill my API every time the same invoices are being processed. However, a **new** invoice has no recorded response, so it needs a live API call.
 
-If you run it without a key first, you'll get an explanation rather than a failure — replay is the default, and live is explicit opt-in:
+**Simplest path — the dashboard walks you through it.** Open the dashboard (`make dashboard`), go to the **Add invoice** tab, and follow the steps. The first time you upload something new, the API-key panel on the right accepts your xAI key with a paste and a click; it writes it to the local (gitignored) `.env` for you. The per-file **Run live** button still requires an explicit confirmation before any call fires, so nothing spends money without you clicking it.
+
+For terminal users, the CLI works the same way:
 
 ```bash
 .venv/bin/python main.py --invoice_path=/path/to/your/invoice.txt
@@ -194,7 +196,7 @@ Typically $0.01–0.10 depending on whether it escalates, capped by a per-invoic
 
 For example, if you run four new invoices once against your live API, those recordings persist — and the next person can process those same invoices without needing a key at all.
 
-The dashboard also accepts uploads, with the live call gated behind an explicit confirmation and a cost estimate. Nothing else in the dashboard can make an API call — page renders are forced to replay mode so browsing can never bill you.
+Nothing else in the dashboard can make an API call — page renders are forced to replay mode so browsing can never bill you.
 
 ---
 
