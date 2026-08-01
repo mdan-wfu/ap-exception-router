@@ -14,9 +14,10 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 # ORDER MATTERS. src.config captures LLM_MODE at import time via
 # `from src.config import LLM_MODE` in src.llm.provider. If we import
@@ -56,6 +57,15 @@ templates = Jinja2Templates(directory=str(TEMPLATES_DIR),
 app = FastAPI(title="AP Exception Router — Dashboard", docs_url=None, redoc_url=None)
 
 
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    if exc.status_code == 404:
+        return templates.TemplateResponse(
+            request, "404.html", {"active_nav": None}, status_code=404
+        )
+    raise exc
+
+
 # ---------------------------------------------------------------------------
 # Queue view (landing)
 # ---------------------------------------------------------------------------
@@ -93,7 +103,7 @@ def queue_view(request: Request, sort: str = "due_date"):
 def invoice_detail(request: Request, invoice_number: str):
     run = data.get_run(invoice_number)
     if run is None:
-        return HTMLResponse(f"<h1>{invoice_number} not found</h1>", status_code=404)
+        raise HTTPException(status_code=404)
     ext, extraction_error = data.re_extract(run["source_file"])
     settlement = data.get_settlement(invoice_number, run["vendor_name"] or "")
     return templates.TemplateResponse(request, "detail.html", {
@@ -147,10 +157,7 @@ def amend_decision(
 def duplicate_view(request: Request, invoice_number: str):
     entries = data.get_duplicate_pair(invoice_number)
     if len(entries) < 2:
-        return HTMLResponse(
-            f"<h1>{invoice_number} has no duplicate group in this corpus</h1>",
-            status_code=404,
-        )
+        raise HTTPException(status_code=404)
     run = data.get_run(invoice_number)
     findings = data.get_findings(run["id"]) if run else []
     dp_findings = [f for f in findings if f["code"].startswith("DP-")]
@@ -198,6 +205,19 @@ def resolve(invoice_number: str, action: str = Form(...), note: str = Form("")):
         url="/held" if action == "HOLD" else "/queue",
         status_code=303,
     )
+
+
+# ---------------------------------------------------------------------------
+# Dismiss failed run
+# ---------------------------------------------------------------------------
+
+@app.post("/failed/{run_id}/dismiss")
+def dismiss_failed(run_id: int):
+    """Soft-delete a failed-run record from the queue view. The audit row
+    is kept for the append-only trail; it is simply excluded from list_runs.
+    Keyed on run_id so empty-invoice-number records are reachable."""
+    data.dismiss_run(run_id)
+    return RedirectResponse(url="/", status_code=303)
 
 
 # ---------------------------------------------------------------------------
@@ -316,7 +336,7 @@ def upload_delete(name: str):
 def upload_detail(request: Request, name: str):
     path = data.uploads_dir() / name
     if not path.exists():
-        return HTMLResponse(f"<h1>upload {name!r} not found</h1>", status_code=404)
+        raise HTTPException(status_code=404)
     preview = _preview_bytes(path)
     return templates.TemplateResponse(request, "upload_detail.html", {
         "active_nav": "upload",
@@ -336,7 +356,7 @@ def upload_run(name: str, confirm: str = Form("")):
     XAI_API_KEY. Runs exactly ONE invoice, live."""
     path = data.uploads_dir() / name
     if not path.exists():
-        return HTMLResponse(f"<h1>upload {name!r} not found</h1>", status_code=404)
+        raise HTTPException(status_code=404)
     if confirm != "yes":
         return RedirectResponse(url=f"/upload/{name}?err=notconfirmed", status_code=303)
     if not data.xai_key_configured():
@@ -381,11 +401,19 @@ def upload_run(name: str, confirm: str = Form("")):
         set_agent_provider(saved_agent)
         set_text_provider(saved_text)
 
-    # A FAILED terminal_status means run_one caught an exception and wrote
-    # a FAILED audit row keyed on the upload's basename. Send the user to
-    # that record — they see the failure reason surfaced next to a normal
-    # invoice detail page, not a bare 500.
+    # FAILED terminal_status has two sub-cases:
+    #   (a) exception during extraction → invoice is None, audit row keyed on
+    #       path.name → /invoice/{path.name} resolves and shows the failure.
+    #   (b) empty invoice_number from extraction → invoice is present but
+    #       invoice_number="" → audit row is unroutable via /invoice/; send
+    #       the user back with a banner instead.
     if state.get("terminal_status") == Outcome.FAILED:
+        inv = state.get("invoice")
+        if inv is not None and not inv.invoice_number:
+            return RedirectResponse(
+                url=f"/upload?err=no_invoice_number&file={path.name}",
+                status_code=303,
+            )
         return RedirectResponse(url=f"/invoice/{path.name}", status_code=303)
 
     # Non-FAILED — the graph ran end-to-end. Redirect to the invoice

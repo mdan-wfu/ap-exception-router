@@ -45,8 +45,19 @@ def corpus_of(source_file: str) -> str:
 # Queue view
 # ---------------------------------------------------------------------------
 
+def _ensure_dismissed_at() -> None:
+    """Add dismissed_at column if the DB predates this feature. Called at
+    the start of list_runs so an existing audit.sqlite picked up from a
+    prior checkout is migrated transparently on first dashboard load."""
+    with _conn() as c:
+        cols = {r["name"] for r in c.execute("PRAGMA table_info(runs)").fetchall()}
+        if "dismissed_at" not in cols:
+            c.execute("ALTER TABLE runs ADD COLUMN dismissed_at TEXT")
+            c.commit()
+
+
 def list_runs() -> list[dict[str, Any]]:
-    """Every run in the store, one row per invoice.
+    """Every non-dismissed run in the store, one row per invoice.
 
     IMPORTANT — every row carries `effective_outcome`, the authoritative
     state after model → human → amendments has resolved. All views, filters,
@@ -55,6 +66,7 @@ def list_runs() -> list[dict[str, Any]]:
     view. See DECISIONS 2026-07-31 effective-outcome-everywhere for why
     this is enforced at the query layer rather than left to each view."""
     _ensure_amendments_table()
+    _ensure_dismissed_at()
     with _conn() as c:
         rows = c.execute("""
             SELECT r.id, r.invoice_number, r.vendor_name, r.source_file,
@@ -67,6 +79,7 @@ def list_runs() -> list[dict[str, Any]]:
                    (SELECT COUNT(*) FROM tool_calls t WHERE t.run_id = r.id) AS n_tools,
                    (SELECT COUNT(*) FROM model_calls m WHERE m.run_id = r.id) AS n_calls
             FROM runs r
+            WHERE r.dismissed_at IS NULL
             ORDER BY r.invoice_number
         """).fetchall()
         # Latest amendment per invoice, so we compute effective_outcome
@@ -527,6 +540,13 @@ def _safe_source_text(source_file: str) -> str:
 # ---------------------------------------------------------------------------
 # Human queue actions
 # ---------------------------------------------------------------------------
+
+def dismiss_run(run_id: int) -> None:
+    """Soft-delete a failed run so it no longer appears in the queue.
+    The audit row is preserved; only the dashboard view is updated."""
+    from src.store.audit import AuditStore
+    AuditStore().dismiss_run(run_id)
+
 
 def record_human_decision(
     invoice_number: str, human_outcome: str, human_note: str

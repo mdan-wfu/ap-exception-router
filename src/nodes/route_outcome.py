@@ -15,6 +15,19 @@ from src.store.audit import AuditStore
 
 def route_outcome(state: GraphState) -> dict:
     decision = state.get("decision")
+    invoice = state.get("invoice")
+
+    # An empty invoice_number means extraction produced a structurally valid
+    # Invoice but no usable ID. Those records are unroutable via /invoice/
+    # and appear as orphaned ESCALATE items in the queue. Classify FAILED
+    # so they land in the failed-runs section instead.
+    if invoice is not None and not invoice.invoice_number:
+        _persist(state, Outcome.FAILED, "no invoice number extracted")
+        return {
+            "terminal_status": Outcome.FAILED,
+            "failure_reason": "no invoice number extracted",
+            "nodes_fired": ["route_outcome"],
+        }
 
     if decision is None:
         _persist(state, Outcome.FAILED, "no Adjudicator decision available")

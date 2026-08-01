@@ -145,8 +145,12 @@
       {% for r in failed %}
       <tr>
         <td class="mono text-xs">
-          <a href="/invoice/{{ r.invoice_number }}">{{ r.invoice_number }}</a>
-          <div class="text-xs mt-1" style="color: var(--ink-dim);">{{ r.source_format or "?" }}</div>
+          {% if r.invoice_number %}
+            <a href="/invoice/{{ r.invoice_number }}">{{ r.invoice_number }}</a>
+          {% else %}
+            <span style="color: var(--ink-mute);">(no invoice number)</span>
+          {% endif %}
+          <div class="text-xs mt-1" style="color: var(--ink-dim);">{{ r.source_file.split('/')[-1] if r.source_file else (r.source_format or "?") }}</div>
         </td>
         <td class="text-xs" style="color: var(--ink-mid); max-width: 60ch;">
           {{ r.failure_reason or "(no reason recorded)" }}
@@ -154,7 +158,14 @@
         <td class="text-xs" style="color: var(--ink-mute);">
           <span class="chip chip-failed">FAILED</span>
         </td>
-        <td class="text-right"><a href="/invoice/{{ r.invoice_number }}" class="text-xs">See record →</a></td>
+        <td class="text-right flex items-center justify-end gap-3">
+          {% if r.invoice_number %}
+            <a href="/invoice/{{ r.invoice_number }}" class="text-xs">See record →</a>
+          {% endif %}
+          <form method="post" action="/failed/{{ r.id }}/dismiss" style="display:inline;">
+            <button type="submit" class="text-xs" style="color: var(--ink-mute); background: none; border: none; cursor: pointer; padding: 0;" title="Remove from queue (audit trail kept)">Dismiss</button>
+          </form>
+        </td>
       </tr>
       {% endfor %}
     </tbody>

@@ -106,7 +106,8 @@ class AuditStore:
                     terminal_status           TEXT NOT NULL,
                     failure_reason            TEXT,
                     human_outcome             TEXT,   -- APPROVE | REJECT | HOLD | NULL
-                    human_note                TEXT
+                    human_note                TEXT,
+                    dismissed_at              TEXT
                 );
                 CREATE INDEX IF NOT EXISTS idx_runs_invoice_number ON runs(invoice_number);
                 CREATE INDEX IF NOT EXISTS idx_runs_vendor         ON runs(vendor_name);
@@ -171,6 +172,11 @@ class AuditStore:
                 CREATE INDEX IF NOT EXISTS idx_settlements_run_id ON settlements(run_id);
             """)
             conn.commit()
+            # ALTER TABLE lacks IF NOT EXISTS — guard with PRAGMA.
+            cols = {r[1] for r in conn.execute("PRAGMA table_info(runs)").fetchall()}
+            if "dismissed_at" not in cols:
+                conn.execute("ALTER TABLE runs ADD COLUMN dismissed_at TEXT")
+                conn.commit()
 
     # -- Writes ---------------------------------------------------------------
 
@@ -297,6 +303,16 @@ class AuditStore:
             )
             conn.commit()
             return cursor.lastrowid
+
+    def dismiss_run(self, run_id: int) -> None:
+        """Soft-delete: mark a run dismissed so list_runs excludes it.
+        Idempotent — calling twice refreshes the timestamp."""
+        with self._conn() as conn:
+            conn.execute(
+                "UPDATE runs SET dismissed_at = ? WHERE id = ?",
+                (datetime.now(timezone.utc).isoformat(), run_id),
+            )
+            conn.commit()
 
     def record_settlement(self, *, run_id: int | None, invoice_number: str,
                           vendor_name: str, settlement_type: str,

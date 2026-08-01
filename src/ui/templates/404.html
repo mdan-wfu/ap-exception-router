@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block title %}Not Found — AP Exception Router{% endblock %}
+{% block content %}
+<div class="flex flex-col items-center justify-center py-24 text-center">
+  <div class="display display-bold text-8xl mb-4" style="color: var(--ink-dim);">404</div>
+  <h1 class="display text-2xl mb-3" style="color: var(--ink-mid);">Page not found</h1>
+  <p class="text-sm mb-8" style="color: var(--ink-mute); max-width: 40ch;">
+    The route you requested does not exist. It may have been moved, or the
+    invoice number in the URL may be wrong.
+  </p>
+  <a href="/" class="text-sm" style="color: var(--accent);">← Back to queue</a>
+</div>
+{% endblock %}
